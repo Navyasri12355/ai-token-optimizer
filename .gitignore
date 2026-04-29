@@ -1,0 +1,44 @@
+# ---- Python ----
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+
+# ---- Virtual Environment ----
+venv/
+.env/
+.env.*
+
+# ---- OS Files ----
+.DS_Store
+Thumbs.db
+
+# ---- IDE ----
+.vscode/
+.idea/
+
+# ---- Data Files (BIG) ----
+data/raw.json
+data/processed.csv
+data/*.csv
+
+# ---- Models ----
+ml/*.pkl
+
+# ---- Spark ----
+spark-warehouse/
+metastore_db/
+
+# ---- NLTK ----
+nltk_data/
+
+# ---- Streamlit ----
+.streamlit/
+
+# ---- MongoDB Local Dumps ----
+dump/
+
+# ---- Misc ----
+*.tmp
+*.bak
