@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  # Elasticsearch - Search and analytics engine
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.0.0
+    container_name: es-node
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - xpack.security.enrollment.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - elastic-network
+    healthcheck:
+      test: curl -s http://localhost:9200 >/dev/null || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Kibana - Visualization and exploration platform
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.0.0
+    container_name: kibana
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - elastic-network
+    healthcheck:
+      test: curl -s http://localhost:5601/api/status >/dev/null || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Logstash (optional) - Data processing pipeline
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.0.0
+    container_name: logstash
+    ports:
+      - "5000:5000"
+      - "9600:9600"
+    volumes:
+      - ./logs/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
+    environment:
+      - "LS_JAVA_OPTS=-Xmx256m -Xms256m"
+    depends_on:
+      - elasticsearch
+    networks:
+      - elastic-network
+
+volumes:
+  elasticsearch_data:
+    driver: local
+
+networks:
+  elastic-network:
+    driver: bridge
