@@ -1,62 +1,175 @@
+"""
+Distributed preprocessing pipeline using PySpark.
+Reads raw.json, extracts human→gpt conversation pairs,
+computes all features with Spark UDFs, and writes a
+distributed Parquet dataset — no pandas or local Python loops.
+"""
+
+import sys
+from pathlib import Path
+
+# Force UTF-8 encoding for stdout/stderr to prevent "Invalid argument" on Windows
+sys.stdout.reconfigure(encoding="utf-8")
+sys.stderr.reconfigure(encoding="utf-8")
+
+# Project root is one level above this file (spark/)
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
 from pyspark.sql import SparkSession
-import pandas as pd
-import json
-import tiktoken
+from pyspark.sql import functions as F
+from pyspark.sql.types import (
+    StructType, StructField, StringType, ArrayType,
+    IntegerType, DoubleType, LongType
+)
+from pyspark.sql.window import Window
 
-# Start Spark (just for usage later)
-spark = SparkSession.builder.appName("LLM").getOrCreate()
+# ---------------------------------------------------------------------------
+# 1.  Spark Session — increased memory + off-heap to handle 6.7 GB JSON
+# ---------------------------------------------------------------------------
+spark = (
+    SparkSession.builder
+    .appName("TokenOptimizerPreprocess")
+    .config("spark.driver.memory", "10g")
+    .config("spark.executor.memory", "6g")
+    .config("spark.driver.maxResultSize", "4g")
+    .config("spark.memory.offHeap.enabled", "true")
+    .config("spark.memory.offHeap.size", "4g")
+    .config("spark.sql.shuffle.partitions", "32")
+    .config("spark.sql.files.maxPartitionBytes", "134217728")  # 128 MB
+    .getOrCreate()
+)
+spark.sparkContext.setLogLevel("WARN")
 
-# Load JSON using Python (NOT Spark)
-with open("data/raw.json", "r", encoding="utf-8") as f:
-    data = json.load(f)
+# ---------------------------------------------------------------------------
+# 2.  Paths
+# ---------------------------------------------------------------------------
+RAW_JSON = str(PROJECT_ROOT / "data" / "raw.json")
+OUT_DIR  = str(PROJECT_ROOT / "data" / "processed.parquet")
 
+print(f"📂  Loading {RAW_JSON} ...")
 
-enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
+# ---------------------------------------------------------------------------
+# 3.  Load raw.json — multiline JSON array, one object per row
+# ---------------------------------------------------------------------------
+raw_df = (
+    spark.read
+    .option("multiline", "true")
+    .json(RAW_JSON)
+)
 
-rows = []
+raw_count = raw_df.count()
+print(f"   Raw records loaded: {raw_count:,}")
+if raw_count == 0:
+    print("❌  No records found in raw.json — check the file path and JSON structure.")
+    spark.stop()
+    sys.exit(1)
 
-for item in data:
-    convo = item["conversations"]
+# ---------------------------------------------------------------------------
+# 4.  Explode conversations into (human_prompt, gpt_response) pairs
+#
+#     Uses window LAG() instead of a self-join:
+#       - one pass over the data, no shuffle join
+#       - keeps pairs where current turn is "gpt" and previous is "human"
+# ---------------------------------------------------------------------------
+turns_df = raw_df.select(
+    "id",
+    F.posexplode("conversations").alias("pos", "turn")
+).select(
+    "id",
+    "pos",
+    F.col("turn.from").alias("sender"),
+    F.col("turn.value").alias("value"),
+)
 
-    for i in range(len(convo) - 1):
-        if convo[i]["from"] == "human" and convo[i+1]["from"] == "gpt":
+# Window over each conversation, ordered by position
+w = Window.partitionBy("id").orderBy("pos")
 
-            prompt = convo[i]["value"]
-            response = convo[i+1]["value"]
+pairs_df = (
+    turns_df
+    .withColumn("prev_sender", F.lag("sender", 1).over(w))
+    .withColumn("prev_value",  F.lag("value",  1).over(w))
+    # Keep only gpt turns where the immediately prior turn was human
+    .filter((F.col("sender") == "gpt") & (F.col("prev_sender") == "human"))
+    .select(
+        F.col("id").alias("conv_id"),
+        F.col("pos").alias("turn_pos"),
+        F.col("prev_value").alias("prompt"),
+        F.col("value").alias("response"),
+    )
+)
 
-            input_tokens = len(enc.encode(prompt))
-            output_tokens = len(enc.encode(response))
+print("⚙️   Computing features (distributed UDFs) ...")
 
-            words = prompt.split()
+# ---------------------------------------------------------------------------
+# 5.  Feature UDFs (all run inside Spark executors)
+# ---------------------------------------------------------------------------
 
-            if len(words) == 0:
-                avg_word_len = 0
-                num_words = 0
-            else:
-                num_words = len(words)
-                avg_word_len = sum(len(w) for w in words) / num_words
+def _count_tokens(text: str) -> int:
+    """Return GPT-3.5-turbo token count for *text*."""
+    if not text:
+        return 0
+    import tiktoken  # imported inside UDF so workers load it lazily
+    enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
+    return len(enc.encode(text))
 
-            question_words = ["what", "why", "how", "explain", "describe"]
-            question_flag = int(any(q in prompt.lower() for q in question_words))
+def _num_words(text: str) -> int:
+    if not text:
+        return 0
+    return len(text.split())
 
-            rows.append({
-    "text_len": len(prompt),
-    "context_len": len(prompt),
-    "num_words": num_words,
-    "avg_word_len": avg_word_len,
-    "question_flag": question_flag,
-    "input_tokens": input_tokens,
-    "output_tokens": output_tokens
-})
+def _avg_word_len(text: str) -> float:
+    if not text:
+        return 0.0
+    words = text.split()
+    if not words:
+        return 0.0
+    return float(sum(len(w) for w in words)) / float(len(words))
 
-# Convert to pandas
-df = pd.DataFrame(rows)
+def _question_flag(text: str) -> int:
+    if not text:
+        return 0
+    lower = text.lower()
+    return int(any(q in lower for q in ("what", "why", "how", "explain", "describe")))
 
-# Save CSV
-df.to_csv("data/processed.csv", index=False)
+udf_count_tokens  = F.udf(_count_tokens,  IntegerType())
+udf_num_words     = F.udf(_num_words,     IntegerType())
+udf_avg_word_len  = F.udf(_avg_word_len,  DoubleType())
+udf_question_flag = F.udf(_question_flag, IntegerType())
 
-print("✅ Processed data saved!")
+# ---------------------------------------------------------------------------
+# 6.  Apply UDFs — all distributed across Spark partitions
+# ---------------------------------------------------------------------------
+features_df = (
+    pairs_df
+    .withColumn("text_len",      F.length("prompt").cast(LongType()))
+    .withColumn("context_len",   F.length("prompt").cast(LongType()))
+    .withColumn("num_words",     udf_num_words("prompt"))
+    .withColumn("avg_word_len",  udf_avg_word_len("prompt"))
+    .withColumn("question_flag", udf_question_flag("prompt"))
+    .withColumn("input_tokens",  udf_count_tokens("prompt"))
+    .withColumn("output_tokens", udf_count_tokens("response"))
+    .select(
+        "conv_id",
+        "turn_pos",
+        "text_len",
+        "context_len",
+        "num_words",
+        "avg_word_len",
+        "question_flag",
+        "input_tokens",
+        "output_tokens",
+    )
+    # Drop rows where tokenisation returned 0 (empty strings)
+    .filter((F.col("input_tokens") > 0) & (F.col("output_tokens") > 0))
+)
 
-# OPTIONAL: Convert to Spark DataFrame (for Big Data requirement)
-spark_df = spark.createDataFrame(df)
-spark_df.show(5)
+# ---------------------------------------------------------------------------
+# 7.  Write as Parquet (native Spark format, columnar, compressed)
+# ---------------------------------------------------------------------------
+print(f"💾  Writing processed data to {OUT_DIR} ...")
+features_df.write.mode("overwrite").parquet(OUT_DIR)
+
+total = spark.read.parquet(OUT_DIR).count()
+print(f"✅  Preprocessed {total:,} rows → {OUT_DIR}")
+
+spark.stop()

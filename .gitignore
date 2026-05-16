@@ -7,8 +7,11 @@ __pycache__/
 
 # ---- Virtual Environment ----
 venv/
+.venv/
 .env/
-.env.*
+
+# ---- Configuration Files ----
+.env
 
 # ---- OS Files ----
 .DS_Store

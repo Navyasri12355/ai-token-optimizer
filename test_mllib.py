@@ -6,11 +6,16 @@ Tests Random Forest and Gradient Boosted Tree models for token prediction.
 import pandas as pd
 import numpy as np
 import os
+import sys
 from pyspark.sql import SparkSession
 from pyspark.ml.feature import VectorAssembler
-from pyspark.ml.regression import RandomForestRegressor, GradientBoostedTreeRegressor
+from pyspark.ml.regression import RandomForestRegressor, GBTRegressor
 from pyspark.ml.evaluation import RegressionEvaluator
 from pyspark.ml import Pipeline
+
+
+os.environ.setdefault("PYSPARK_PYTHON", sys.executable)
+os.environ.setdefault("PYSPARK_DRIVER_PYTHON", sys.executable)
 
 
 class MLlibTester:
@@ -21,10 +26,12 @@ class MLlibTester:
         self.spark = SparkSession.builder \
             .appName("TokenPredictionMLlib_Test") \
             .config("spark.driver.memory", "4g") \
+            .config("spark.pyspark.python", sys.executable) \
+            .config("spark.pyspark.driver.python", sys.executable) \
             .getOrCreate()
         
         self.spark.sparkContext.setLogLevel("WARN")
-        self.data_path = "data/processed.csv"
+        self.data_path = "data/processed.parquet"
         self.feature_cols = [
             "context_len",
             "text_len",
@@ -63,7 +70,9 @@ class MLlibTester:
             
             df = pd.DataFrame(data)
             os.makedirs("data", exist_ok=True)
-            df.to_csv(self.data_path, index=False)
+            # Write sample data as Parquet (distributed format)
+            spark_df = self.spark.createDataFrame(df)
+            spark_df.write.mode("overwrite").parquet(self.data_path)
             
             print(f"✅ Sample data created: {n_samples} samples")
             print(f"   Features: {', '.join(self.feature_cols)}")
@@ -84,8 +93,8 @@ class MLlibTester:
         print("\n📂 Loading Data...")
         
         try:
-            df_pandas = pd.read_csv(self.data_path)
-            df = self.spark.createDataFrame(df_pandas)
+            # Load directly from Parquet — no pandas bridge needed
+            df = self.spark.read.parquet(self.data_path)
             
             print(f"✅ Data loaded: {df.count()} rows, {len(df.columns)} columns")
             
@@ -277,7 +286,7 @@ class MLlibTester:
             )
             
             # Create GBT model
-            gbt_model = GradientBoostedTreeRegressor(
+            gbt_model = GBTRegressor(
                 labelCol="combined_tokens",
                 featuresCol="features",
                 maxIter=100,
