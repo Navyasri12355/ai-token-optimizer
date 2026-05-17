@@ -25,6 +25,9 @@ Thumbs.db
 data/raw.json
 data/processed.csv
 data/*.csv
+data/_chunks_tmp/
+data/_chunk_progress.json
+data/processed.parquet/
 
 # ---- Models ----
 ml/*.pkl
