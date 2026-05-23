@@ -34,7 +34,7 @@ metastore_db/
 nltk_data/
 
 # ---- Streamlit ----
-.streamlit/
+.streamlit/secrets.toml
 
 # ---- MongoDB Local Dumps ----
 dump/

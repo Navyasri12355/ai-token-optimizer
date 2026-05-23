@@ -4,6 +4,10 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import numpy as np
 import tiktoken
+import os
+
+# API URL — set via Streamlit secrets or environment variable
+API_URL = st.secrets.get("API_URL", os.environ.get("API_URL", "http://127.0.0.1:8000"))
 
 # ----------------------------
 # Page Config
@@ -62,7 +66,7 @@ if st.button("🚀 Analyze", use_container_width=True):
         with st.spinner("Analyzing prompt..."):
             try:
                 response = requests.post(
-                    "http://127.0.0.1:8000/predict",
+                    f"{API_URL}/predict",
                     params={"prompt": prompt}
                 )
                 res = response.json()
