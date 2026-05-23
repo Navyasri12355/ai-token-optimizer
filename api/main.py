@@ -27,60 +27,11 @@ MODEL_OUTPUT_PATH = os.path.join(ROOT_DIR, "ml", "model_output.pkl")
 ML_DIR = os.path.join(ROOT_DIR, "ml")
 
 
-def train_and_save_models():
-    """Train models from scratch using synthetic data and save pkl files."""
-    import numpy as np
-    import pandas as pd
-    from sklearn.ensemble import RandomForestRegressor
-    import random
-
-    print("⚙️  No pre-trained models found. Training from synthetic data...")
-
-    os.makedirs(ML_DIR, exist_ok=True)
-
-    random.seed(42)
-    np.random.seed(42)
-
-    # Generate synthetic training data that mimics real tokenization patterns
-    n = 3000
-    text_len     = np.random.randint(20, 800, n)
-    context_len  = text_len
-    num_words    = (text_len / np.random.uniform(4.5, 6.5, n)).astype(int)
-    avg_word_len = text_len / np.maximum(num_words, 1)
-    question_flag = np.random.randint(0, 2, n)
-
-    # Token counts correlate with text length (~0.25 tokens per char for English)
-    input_tokens  = (text_len * 0.26 + np.random.normal(0, 5, n)).clip(5).astype(int)
-    output_tokens = (text_len * 0.55 * (1 + question_flag * 0.4) + np.random.normal(0, 15, n)).clip(5).astype(int)
-
-    X = pd.DataFrame({
-        "context_len":  context_len,
-        "text_len":     text_len,
-        "num_words":    num_words,
-        "avg_word_len": avg_word_len,
-        "question_flag": question_flag,
-    })
-
-    model_input  = RandomForestRegressor(n_estimators=100, random_state=42)
-    model_output = RandomForestRegressor(n_estimators=100, random_state=42)
-
-    model_input.fit(X, input_tokens)
-    model_output.fit(X, output_tokens)
-
-    pickle.dump(model_input,  open(MODEL_INPUT_PATH,  "wb"))
-    pickle.dump(model_output, open(MODEL_OUTPUT_PATH, "wb"))
-
-    print("✅ Models trained and saved.")
-    return model_input, model_output
-
-
-# ---- Load or Train ML Models ----
-if os.path.exists(MODEL_INPUT_PATH) and os.path.exists(MODEL_OUTPUT_PATH):
-    model_input  = pickle.load(open(MODEL_INPUT_PATH,  "rb"))
-    model_output = pickle.load(open(MODEL_OUTPUT_PATH, "rb"))
-    print("✅ Loaded pre-trained models.")
-else:
-    model_input, model_output = train_and_save_models()
+# ---- Load ML Models ----
+print("⚙️  Loading pre-trained models...")
+model_input  = pickle.load(open(MODEL_INPUT_PATH,  "rb"))
+model_output = pickle.load(open(MODEL_OUTPUT_PATH, "rb"))
+print("✅ Models loaded.")
 
 
 # ---- Root Endpoint ----
