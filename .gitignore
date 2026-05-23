@@ -28,6 +28,7 @@ data/*.csv
 data/_chunks_tmp/
 data/_chunk_progress.json
 data/processed.parquet/
+data/processed_enhanced.parquet/
 
 # ---- Models ----
 ml/*.pkl
