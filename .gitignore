@@ -23,8 +23,8 @@ data/raw.json
 data/processed.csv
 data/*.csv
 
-# ---- Models ----
-ml/*.pkl
+# ---- Models (tracked via Git LFS) ----
+# ml/*.pkl  <-- removed, now tracked by .gitattributes via LFS
 
 # ---- Spark ----
 spark-warehouse/
@@ -42,3 +42,5 @@ dump/
 # ---- Misc ----
 *.tmp
 *.bak
+
+*.json
