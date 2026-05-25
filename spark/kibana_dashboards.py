@@ -84,34 +84,32 @@ def wait_for_kibana(kibana_url: str = KIBANA_URL, retries: int = 30) -> bool:
 # ── Data Views (index patterns) ────────────────────────────────────────────────
 def create_data_view(pattern: str, time_field: str = "@timestamp",
                      kibana_url: str = KIBANA_URL):
-    """Create a Kibana data view / index pattern."""
-    payload = {
-        "data_view": {
-            "title": pattern,
-            "timeFieldName": time_field,
-        }
-    }
+    """Create or fetch a Kibana data view / index pattern. Returns its UUID."""
+
+    # 1. Try to create fresh
+    payload = {"data_view": {"title": pattern, "timeFieldName": time_field}}
     res = _post("/api/data_views/data_view", payload, kibana_url)
     if res:
-        logger.info(f"   ✅ Data view created : {pattern}")
-        return res.get("data_view", {}).get("id")
+        vid = res.get("data_view", {}).get("id")
+        logger.info(f"   Data view created : {pattern}  ({vid})")
+        return vid
 
-    # Try legacy saved-object endpoint
-    payload2 = {
-        "attributes": {
-            "title": pattern,
-            "timeFieldName": time_field,
-            "fields": "[]",
-        }
-    }
-    res2 = _post(f"/api/saved_objects/index-pattern/{pattern}",
-                 payload2, kibana_url)
-    if res2:
-        logger.info(f"   ✅ Index pattern created (legacy): {pattern}")
-        return res2.get("id")
+    # 2. Already exists — fetch its ID via search
+    try:
+        url = f"{kibana_url}/api/data_views"
+        r = requests.get(url, headers=HEADERS, timeout=10)
+        if r.status_code == 200:
+            for dv in r.json().get("data_view", []):
+                if dv.get("title") == pattern:
+                    vid = dv["id"]
+                    logger.info(f"   Data view exists  : {pattern}  ({vid})")
+                    return vid
+    except Exception as e:
+        logger.warning(f"   Could not list data views: {e}")
 
-    logger.warning(f"   ⚠️  Could not create data view for {pattern}")
-    return None
+    # 3. Fallback — use pattern string directly (legacy Kibana)
+    logger.warning(f"   Using pattern string as fallback ID: {pattern}")
+    return pattern
 
 
 # ── Visualization helpers ──────────────────────────────────────────────────────

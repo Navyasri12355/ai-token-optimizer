@@ -90,6 +90,27 @@ def run_pipeline(args):
 
     push_event("pipeline_started", {"run_id": run_id, "sample": args.sample})
 
+    raw_jsonl = str(Path(args.raw_json).with_suffix(".jsonl"))
+
+    # ── Stage 0: Convert JSON → JSONL (one-time, fixes OOM) ───────────────────
+    if not args.skip_preprocess and not os.path.exists(raw_jsonl) and getattr(args, "auto_convert", False):
+        _banner("Converting raw.json -> raw.jsonl")
+        logger.info("raw.jsonl not found. Running one-time converter ...")
+        logger.info(f"   Input  : {args.raw_json}  (~6.8 GB)")
+        logger.info(f"   Output : {raw_jsonl}")
+        logger.info("   This may take 10-20 minutes. Run it separately with:")
+        logger.info("   python spark/convert_to_jsonl.py")
+        from spark.convert_to_jsonl import convert_streaming
+        limit = args.sample_size if args.sample else None
+        n = convert_streaming(args.raw_json, raw_jsonl, limit=limit)
+        logger.info(f"   Converted {n:,} records to JSONL")
+        report["stages"]["convert"] = {"records": n}
+    elif not os.path.exists(raw_jsonl) and not args.skip_preprocess:
+        logger.warning(
+            "raw.jsonl not found - using multiline JSON (may OOM on large files). "
+            "Fix: run  python spark/convert_to_jsonl.py  first, then re-run pipeline."
+        )
+
     # ── Stage 1: Preprocessing ─────────────────────────────────────────────────
     if not args.skip_preprocess:
         from spark.preprocess import run_preprocessing
@@ -98,19 +119,21 @@ def run_pipeline(args):
             run_preprocessing,
             sample_size=args.sample_size if args.sample else None,
             raw_json=args.raw_json,
+            jsonl_path=raw_jsonl if os.path.exists(raw_jsonl) else None,
         )
         report["stages"]["preprocess"] = {
             "elapsed_s": elapsed, "error": err, "result": result
         }
         if err and not args.continue_on_error:
-            logger.error("Preprocessing failed. Run with --continue-on-error to skip to next stage.")
+            logger.error("Preprocessing failed. Run with --continue-on-error to skip.")
             logger.error("Full error above. Common causes:")
-            logger.error("  - Not enough memory: try --sample or increase Spark driver memory")
+            logger.error("  - OOM on large file: run  python spark/convert_to_jsonl.py  first")
+            logger.error("  - Or use: python spark/run_pipeline.py --auto-convert")
             logger.error("  - raw.json not found: check --raw-json path")
-            logger.error("  - Java not installed or JAVA_HOME not set")
             sys.exit(1)
     else:
-        logger.info("⏭️  Skipping preprocessing")
+        logger.info("Skipping preprocessing")
+
 
     # ── Stage 2: Model Training ────────────────────────────────────────────────
     if not args.skip_train:
@@ -199,11 +222,16 @@ def _build_parser():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     ap.add_argument("--sample", action="store_true",
-                    help="Use 10k-row sample (fast for testing)")
+                    help="Use sample instead of full dataset (fast for testing)")
     ap.add_argument("--sample-size", type=int, default=50_000,
-                    help="Conversations to use in sample preprocessing")
+                    help="Conversations to use in sample mode")
     ap.add_argument("--raw-json",
                     default=str(ROOT / "data" / "raw.json"))
+    ap.add_argument("--jsonl", action="store_true",
+                    help="Prefer JSONL input if raw.jsonl already exists")
+    ap.add_argument("--auto-convert", action="store_true",
+                    help="Auto-convert raw.json → raw.jsonl before preprocessing "
+                         "(one-time, fixes OOM on large files)")
     ap.add_argument("--models-dir",
                     default=str(ROOT / "spark" / "models"))
     ap.add_argument("--kibana",

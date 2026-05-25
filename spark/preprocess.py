@@ -160,21 +160,40 @@ def run_preprocessing(
     sample_parquet: str = SAMPLE_PARQUET,
     stats_path: str = STATS_PATH,
     raw_json: str = RAW_JSON_PATH,
+    jsonl_path: str = None,
 ):
     """
     Full preprocessing pipeline.
 
     Args:
-        sample_size: If set, take only this many top-level records (for testing).
+        sample_size:    If set, take only this many top-level records (for testing).
         output_parquet: Destination for full processed dataset.
-        sample_parquet: Destination for a 10 k-row sample used by the trainer.
-        stats_path: JSON file for summary statistics.
-        raw_json: Path to raw.json.
+        sample_parquet: Destination for a 10k-row sample used by the trainer.
+        stats_path:     JSON file for summary statistics.
+        raw_json:       Path to raw.json (multiline array — fallback).
+        jsonl_path:     Path to raw.jsonl (preferred — avoids OOM on large files).
     """
     t0 = time.time()
+
+    # ── Auto-detect JSONL ────────────────────────────────────────────────────────
+    # Prefer JSONL because Spark can split it across partitions without OOM.
+    # Fallback to raw.json with multiline=True only if JSONL not available.
+    _jsonl = jsonl_path or str(Path(raw_json).with_suffix(".jsonl"))
+    use_jsonl = os.path.exists(_jsonl)
+
+    input_file = _jsonl if use_jsonl else raw_json
+    input_mode = "JSONL (partitioned)" if use_jsonl else "JSON array (multiline)"
+
     logger.info("Starting PySpark preprocessing pipeline")
-    logger.info(f"   raw_json  : {raw_json}")
+    logger.info(f"   input     : {input_file}")
+    logger.info(f"   format    : {input_mode}")
     logger.info(f"   output    : {output_parquet}")
+    if not use_jsonl:
+        logger.warning(
+            "JSONL not found - falling back to multiline JSON. "
+            "This may OOM on large files. Run first: "
+            "python spark/convert_to_jsonl.py"
+        )
 
     # ── Build Spark session ──────────────────────────────────────────────────────
     from spark.spark_session import get_spark
@@ -198,8 +217,8 @@ def run_preprocessing(
     spark.sparkContext.setCheckpointDir(str(ROOT / "spark" / "tmp" / "checkpoints"))
     logger.info("SparkSession created")
 
-    # ── Load raw JSON ──────────────────────────────────────────────────────────
-    logger.info("📂 Loading raw.json …")
+    # ── Load data ─────────────────────────────────────────────────────────────
+    logger.info(f"Loading input data ({input_mode}) ...")
 
     raw_schema = StructType([
         StructField("id",            StringType(), True),
@@ -211,16 +230,25 @@ def run_preprocessing(
         ), True),
     ])
 
-    df_raw = (
-        spark.read
-        .option("multiline", "true")
-        .schema(raw_schema)
-        .json(raw_json)
-    )
+    if use_jsonl:
+        # JSONL: Spark splits at newlines → proper parallelism, no OOM
+        df_raw = (
+            spark.read
+            .schema(raw_schema)
+            .json(_jsonl)          # no multiline option needed
+        )
+    else:
+        # Fallback: entire file in one partition — OOM risk on large files
+        df_raw = (
+            spark.read
+            .option("multiline", "true")
+            .schema(raw_schema)
+            .json(raw_json)
+        )
 
     if sample_size:
         df_raw = df_raw.limit(sample_size)
-        logger.info(f"   Sample mode: capped at {sample_size} conversations")
+        logger.info(f"   Sample mode: capped at {sample_size:,} conversations")
 
     total_convs = df_raw.count()
     logger.info(f"   Loaded {total_convs:,} conversation records")
