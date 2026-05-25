@@ -1,15 +1,22 @@
 version: '3.8'
 
 services:
-  # Elasticsearch - Search and analytics engine
+  # ─────────────────────────────────────────────────────────────
+  # Elasticsearch
+  # ─────────────────────────────────────────────────────────────
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.0.0
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
     container_name: es-node
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
       - xpack.security.enrollment.enabled=false
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+      - bootstrap.memory_lock=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
     ports:
       - "9200:9200"
       - "9300:9300"
@@ -18,45 +25,58 @@ services:
     networks:
       - elastic-network
     healthcheck:
-      test: curl -s http://localhost:9200 >/dev/null || exit 1
-      interval: 30s
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'"]
+      interval: 15s
       timeout: 10s
-      retries: 5
+      retries: 10
+      start_period: 30s
 
-  # Kibana - Visualization and exploration platform
+  # ─────────────────────────────────────────────────────────────
+  # Kibana
+  # ─────────────────────────────────────────────────────────────
   kibana:
-    image: docker.elastic.co/kibana/kibana:8.0.0
+    image: docker.elastic.co/kibana/kibana:8.11.0
     container_name: kibana
     ports:
       - "5601:5601"
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - XPACK_SECURITY_ENABLED=false
+      - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=a7a6311933d3503b89bc2dbc36572c33a6c10925682e591bffcab6911c06786d
     depends_on:
       elasticsearch:
         condition: service_healthy
     networks:
       - elastic-network
     healthcheck:
-      test: curl -s http://localhost:5601/api/status >/dev/null || exit 1
-      interval: 30s
+      test: ["CMD-SHELL", "curl -s http://localhost:5601/api/status | grep -q '\"level\":\"available\"'"]
+      interval: 15s
       timeout: 10s
-      retries: 5
+      retries: 10
+      start_period: 60s
 
-  # Logstash (optional) - Data processing pipeline
+  # ─────────────────────────────────────────────────────────────
+  # Logstash (optional – for log ingestion pipelines)
+  # ─────────────────────────────────────────────────────────────
   logstash:
-    image: docker.elastic.co/logstash/logstash:8.0.0
+    image: docker.elastic.co/logstash/logstash:8.11.0
     container_name: logstash
     ports:
-      - "5000:5000"
-      - "9600:9600"
+      - "5044:5044"   # Beats input
+      - "9600:9600"   # Monitoring API
     volumes:
       - ./logs/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
     environment:
       - "LS_JAVA_OPTS=-Xmx256m -Xms256m"
+      - XPACK_MONITORING_ENABLED=false
     depends_on:
-      - elasticsearch
+      elasticsearch:
+        condition: service_healthy
     networks:
       - elastic-network
+    # Logstash is optional – comment it out if you don't need it
+    profiles:
+      - full
 
 volumes:
   elasticsearch_data:

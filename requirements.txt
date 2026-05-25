@@ -4,13 +4,14 @@ uvicorn[standard]
 streamlit
 
 # Distributed compute / ML
-pyspark
+pyspark>=3.4.0
 
 # Data & NLP
 datasets
 numpy
 tiktoken
 nltk
+pandas
 
 # Storage
 pymongo
@@ -22,8 +23,11 @@ requests
 matplotlib
 
 # Monitoring / logging
-elasticsearch
+elasticsearch>=8.0.0,<9.0.0   # must match ES server version in docker-compose (8.x)
 python-json-logger
 
 # Environment management
 python-dotenv
+
+# Testing
+pytest

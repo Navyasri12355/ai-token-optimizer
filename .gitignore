@@ -49,4 +49,9 @@ dump/
 
 # ---- Misc ----
 *.tmp
+tmp/
 *.bak
+*.index
+
+# ---- Output files ----
+output/

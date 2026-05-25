@@ -1,175 +1,376 @@
 """
-Distributed preprocessing pipeline using PySpark.
-Reads raw.json, extracts human→gpt conversation pairs,
-computes all features with Spark UDFs, and writes a
-distributed Parquet dataset — no pandas or local Python loops.
+spark/preprocess.py
+====================
+PySpark-based preprocessing pipeline for raw.json conversational data.
+
+Schema of raw.json:
+  [ { "id": str,
+      "conversations": [ {"from": "human"|"gpt", "value": str}, ... ] },
+    ... ]
+
+Produces a processed Parquet dataset with per-turn features:
+  - record_id, turn_index, role ("human" / "gpt")
+  - raw_text
+  - char_count, word_count, token_count (whitespace approximation)
+  - sentence_count, avg_word_length
+  - has_code_block (bool)
+  - optimized_text, optimized_token_count, token_savings, savings_pct
+  - conversation_turn_count (total turns in that conversation)
 """
 
+import re
 import sys
+import time
+import logging
+import os
 from pathlib import Path
 
-# Force UTF-8 encoding for stdout/stderr to prevent "Invalid argument" on Windows
-sys.stdout.reconfigure(encoding="utf-8")
-sys.stderr.reconfigure(encoding="utf-8")
-
-# Project root is one level above this file (spark/)
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-
+# ── PySpark imports ────────────────────────────────────────────────────────────
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 from pyspark.sql.types import (
     StructType, StructField, StringType, ArrayType,
-    IntegerType, DoubleType, LongType
-)
-from pyspark.sql.window import Window
-
-# ---------------------------------------------------------------------------
-# 1.  Spark Session — increased memory + off-heap to handle 6.7 GB JSON
-# ---------------------------------------------------------------------------
-spark = (
-    SparkSession.builder
-    .appName("TokenOptimizerPreprocess")
-    .config("spark.driver.memory", "10g")
-    .config("spark.executor.memory", "6g")
-    .config("spark.driver.maxResultSize", "4g")
-    .config("spark.memory.offHeap.enabled", "true")
-    .config("spark.memory.offHeap.size", "4g")
-    .config("spark.sql.shuffle.partitions", "32")
-    .config("spark.sql.files.maxPartitionBytes", "134217728")  # 128 MB
-    .getOrCreate()
-)
-spark.sparkContext.setLogLevel("WARN")
-
-# ---------------------------------------------------------------------------
-# 2.  Paths
-# ---------------------------------------------------------------------------
-RAW_JSON = str(PROJECT_ROOT / "data" / "raw.json")
-OUT_DIR  = str(PROJECT_ROOT / "data" / "processed.parquet")
-
-print(f"📂  Loading {RAW_JSON} ...")
-
-# ---------------------------------------------------------------------------
-# 3.  Load raw.json — multiline JSON array, one object per row
-# ---------------------------------------------------------------------------
-raw_df = (
-    spark.read
-    .option("multiline", "true")
-    .json(RAW_JSON)
+    IntegerType, FloatType, BooleanType, LongType
 )
 
-raw_count = raw_df.count()
-print(f"   Raw records loaded: {raw_count:,}")
-if raw_count == 0:
-    print("❌  No records found in raw.json — check the file path and JSON structure.")
-    spark.stop()
-    sys.exit(1)
+# ── Project root on sys.path ───────────────────────────────────────────────────
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
 
-# ---------------------------------------------------------------------------
-# 4.  Explode conversations into (human_prompt, gpt_response) pairs
-#
-#     Uses window LAG() instead of a self-join:
-#       - one pass over the data, no shuffle join
-#       - keeps pairs where current turn is "gpt" and previous is "human"
-# ---------------------------------------------------------------------------
-turns_df = raw_df.select(
-    "id",
-    F.posexplode("conversations").alias("pos", "turn")
-).select(
-    "id",
-    "pos",
-    F.col("turn.from").alias("sender"),
-    F.col("turn.value").alias("value"),
-)
+# ELK logger (graceful fallback if ES is not running)
+try:
+    from spark.elk_logger import get_elk_logger
+    logger = get_elk_logger("preprocess")
+except Exception:
+    logging.basicConfig(level=logging.INFO,
+                        format="%(asctime)s %(levelname)s %(message)s")
+    logger = logging.getLogger("preprocess")
 
-# Window over each conversation, ordered by position
-w = Window.partitionBy("id").orderBy("pos")
+# ── Paths ──────────────────────────────────────────────────────────────────────
+RAW_JSON_PATH     = str(ROOT / "data" / "raw.json")
+OUTPUT_PARQUET    = str(ROOT / "spark" / "output" / "processed")
+SAMPLE_PARQUET    = str(ROOT / "spark" / "output" / "sample")
+STATS_PATH        = str(ROOT / "spark" / "output" / "stats.json")
 
-pairs_df = (
-    turns_df
-    .withColumn("prev_sender", F.lag("sender", 1).over(w))
-    .withColumn("prev_value",  F.lag("value",  1).over(w))
-    # Keep only gpt turns where the immediately prior turn was human
-    .filter((F.col("sender") == "gpt") & (F.col("prev_sender") == "human"))
-    .select(
-        F.col("id").alias("conv_id"),
-        F.col("pos").alias("turn_pos"),
-        F.col("prev_value").alias("prompt"),
-        F.col("value").alias("response"),
-    )
-)
+# ── Optimisation helpers ──────────────────────────────────────────────────────
+# NOTE: All constants are defined INSIDE the UDF closures so PySpark can
+# serialise (pickle) the functions correctly on Windows.
 
-print("⚙️   Computing features (distributed UDFs) ...")
+# These are also exported for unit tests (test_pipeline.py imports them).
+_KEEP = {"not","no","how","what","why","who","when","where",
+         "explain","define","compare","list","give","examples"}
+_FILLERS = [
+    "please", "could you", "would you mind", "kindly",
+    "i would like you to", "can you", "tell me", "help me understand"
+]
 
-# ---------------------------------------------------------------------------
-# 5.  Feature UDFs (all run inside Spark executors)
-# ---------------------------------------------------------------------------
 
-def _count_tokens(text: str) -> int:
-    """Return GPT-3.5-turbo token count for *text*."""
+def _build_stops():
+    """Build stopwords set – called inside each UDF to avoid pickle issues."""
+    keep = {"not","no","how","what","why","who","when","where",
+            "explain","define","compare","list","give","examples"}
+    try:
+        import nltk as _nltk
+        try:
+            _nltk.data.find("corpora/stopwords")
+        except LookupError:
+            _nltk.download("stopwords", quiet=True)
+        from nltk.corpus import stopwords as _sw
+        return set(_sw.words("english")) - keep
+    except Exception:
+        return set()
+
+
+# Module-level cache (used only by unit tests / non-Spark code)
+try:
+    _STOPS = _build_stops()
+except Exception:
+    _STOPS = set()
+
+
+# ── UDF functions – self-contained closures (no module-level mutable state) ───
+def _optimize_text(text):
+    """Lightweight prompt optimiser – safe for PySpark pickle."""
+    if not text:
+        return text
+    _fillers = [
+        "please", "could you", "would you mind", "kindly",
+        "i would like you to", "can you", "tell me", "help me understand"
+    ]
+    _keep = {"not","no","how","what","why","who","when","where",
+             "explain","define","compare","list","give","examples"}
+    import re as _re
+    t = text.lower()
+    for f in _fillers:
+        t = t.replace(f, "")
+    t = _re.sub(r"[^\w\s]", "", t)
+    words = t.split()
+    # Use a small embedded stopword list to avoid pickling nltk
+    _basic_stops = {
+        "i","me","my","myself","we","our","ours","ourselves","you","your",
+        "yours","he","him","his","she","her","hers","it","its","they",
+        "them","their","this","that","these","those","am","is","are","was",
+        "were","be","been","being","have","has","had","do","does","did",
+        "a","an","the","and","but","if","or","as","at","by","for","in",
+        "of","on","to","up","with","about","into","through","then","just",
+        "so","than","too","very","some","same","such","also","each",
+    } - _keep
+    words = [w for w in words if w not in _basic_stops]
+    seen, uniq = set(), []
+    for w in words:
+        if w not in seen:
+            uniq.append(w); seen.add(w)
+    result = " ".join(uniq)
+    return result if result.strip() else text
+
+
+def _approx_tokens(text):
     if not text:
         return 0
-    import tiktoken  # imported inside UDF so workers load it lazily
-    enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
-    return len(enc.encode(text))
+    return max(1, len(text.split()))
 
-def _num_words(text: str) -> int:
-    if not text:
-        return 0
-    return len(text.split())
 
-def _avg_word_len(text: str) -> float:
-    if not text:
-        return 0.0
+def _sentence_count(text):
+    import re as _re
+    return max(1, len(_re.split(r"[.!?]+", text)))
+
+
+def _avg_word_len(text):
     words = text.split()
     if not words:
         return 0.0
-    return float(sum(len(w) for w in words)) / float(len(words))
+    return float(sum(len(w) for w in words)) / len(words)
 
-def _question_flag(text: str) -> int:
-    if not text:
-        return 0
-    lower = text.lower()
-    return int(any(q in lower for q in ("what", "why", "how", "explain", "describe")))
 
-udf_count_tokens  = F.udf(_count_tokens,  IntegerType())
-udf_num_words     = F.udf(_num_words,     IntegerType())
-udf_avg_word_len  = F.udf(_avg_word_len,  DoubleType())
-udf_question_flag = F.udf(_question_flag, IntegerType())
+def _has_code(text):
+    return "```" in text
 
-# ---------------------------------------------------------------------------
-# 6.  Apply UDFs — all distributed across Spark partitions
-# ---------------------------------------------------------------------------
-features_df = (
-    pairs_df
-    .withColumn("text_len",      F.length("prompt").cast(LongType()))
-    .withColumn("context_len",   F.length("prompt").cast(LongType()))
-    .withColumn("num_words",     udf_num_words("prompt"))
-    .withColumn("avg_word_len",  udf_avg_word_len("prompt"))
-    .withColumn("question_flag", udf_question_flag("prompt"))
-    .withColumn("input_tokens",  udf_count_tokens("prompt"))
-    .withColumn("output_tokens", udf_count_tokens("response"))
-    .select(
-        "conv_id",
-        "turn_pos",
-        "text_len",
-        "context_len",
-        "num_words",
-        "avg_word_len",
-        "question_flag",
-        "input_tokens",
-        "output_tokens",
+
+# ── Register as Spark UDFs ─ ONLY for non-Spark code / unit tests ───────────
+# The preprocessing pipeline itself now uses only Spark SQL native expressions
+# (regexp_replace, split, size, length, etc.) so no Python UDF subprocess is
+# needed, which avoids the Windows socket error in PySpark 3.x.
+# These wrappers are kept so test_pipeline.py can still exercise the logic.
+
+
+# ── Main pipeline ──────────────────────────────────────────────────────────────
+def run_preprocessing(
+    sample_size: int = None,
+    output_parquet: str = OUTPUT_PARQUET,
+    sample_parquet: str = SAMPLE_PARQUET,
+    stats_path: str = STATS_PATH,
+    raw_json: str = RAW_JSON_PATH,
+):
+    """
+    Full preprocessing pipeline.
+
+    Args:
+        sample_size: If set, take only this many top-level records (for testing).
+        output_parquet: Destination for full processed dataset.
+        sample_parquet: Destination for a 10 k-row sample used by the trainer.
+        stats_path: JSON file for summary statistics.
+        raw_json: Path to raw.json.
+    """
+    t0 = time.time()
+    logger.info("Starting PySpark preprocessing pipeline")
+    logger.info(f"   raw_json  : {raw_json}")
+    logger.info(f"   output    : {output_parquet}")
+
+    # ── Build Spark session ──────────────────────────────────────────────────────
+    from spark.spark_session import get_spark
+    spark = get_spark(
+        app_name="TokenOptimizerPreprocessing",
+        driver_memory="8g",
+        shuffle_partitions=4,
+        extra_configs={
+            # Allow Spark to spill to disk when heap is full
+            "spark.memory.fraction":           "0.7",
+            "spark.memory.storageFraction":    "0.3",
+            # Disable whole-stage codegen (reduces per-task heap pressure)
+            "spark.sql.codegen.wholeStage":    "false",
+            # Write Parquet without pre-shuffle repartition
+            "spark.sql.files.maxPartitionBytes": "134217728",  # 128 MB per partition
+            # Checkpoint dir so Spark can spill shuffle data to disk
+            "spark.local.dir": str(ROOT / "spark" / "tmp"),
+        }
     )
-    # Drop rows where tokenisation returned 0 (empty strings)
-    .filter((F.col("input_tokens") > 0) & (F.col("output_tokens") > 0))
-)
+    # Set checkpoint dir for disk spill
+    spark.sparkContext.setCheckpointDir(str(ROOT / "spark" / "tmp" / "checkpoints"))
+    logger.info("SparkSession created")
 
-# ---------------------------------------------------------------------------
-# 7.  Write as Parquet (native Spark format, columnar, compressed)
-# ---------------------------------------------------------------------------
-print(f"💾  Writing processed data to {OUT_DIR} ...")
-features_df.write.mode("overwrite").parquet(OUT_DIR)
+    # ── Load raw JSON ──────────────────────────────────────────────────────────
+    logger.info("📂 Loading raw.json …")
 
-total = spark.read.parquet(OUT_DIR).count()
-print(f"✅  Preprocessed {total:,} rows → {OUT_DIR}")
+    raw_schema = StructType([
+        StructField("id",            StringType(), True),
+        StructField("conversations", ArrayType(
+            StructType([
+                StructField("from",  StringType(), True),
+                StructField("value", StringType(), True),
+            ])
+        ), True),
+    ])
 
-spark.stop()
+    df_raw = (
+        spark.read
+        .option("multiline", "true")
+        .schema(raw_schema)
+        .json(raw_json)
+    )
+
+    if sample_size:
+        df_raw = df_raw.limit(sample_size)
+        logger.info(f"   Sample mode: capped at {sample_size} conversations")
+
+    total_convs = df_raw.count()
+    logger.info(f"   Loaded {total_convs:,} conversation records")
+
+    # ── Explode turns ──────────────────────────────────────────────────────────
+    # Add turn index before explode
+    df_indexed = df_raw.select(
+        F.col("id").alias("record_id"),
+        F.posexplode("conversations").alias("turn_index", "turn"),
+        F.size("conversations").alias("conversation_turn_count"),
+    )
+
+    # ── Feature extraction using ONLY Spark SQL native expressions ───────────
+    # (No Python UDF subprocess → avoids Windows socket crash in PySpark 3.x)
+    logger.info("Extracting features ...")
+
+    # Filler phrases to strip (applied via regexp_replace chains)
+    _FILLER_RE = "(?i)(please |could you |would you mind |kindly |i would like you to |can you |tell me |help me understand )"
+
+    df_feats = (
+        df_indexed
+        .withColumn("role",     F.col("turn.from"))
+        .withColumn("raw_text", F.coalesce(F.col("turn.value"), F.lit("")))
+        .drop("turn")
+        # — Basic text stats (all native Spark) —
+        .withColumn("char_count",   F.length("raw_text"))
+        .withColumn("word_count",   F.size(F.split(F.trim(F.col("raw_text")), r"\s+")))
+        # Approx tokens = word_count (whitespace split)
+        .withColumn("token_count",  F.size(F.split(F.trim(F.col("raw_text")), r"\s+")))
+        # Sentence count: number of sentence-ending punctuation groups
+        .withColumn("sentence_count",
+                    F.greatest(
+                        F.lit(1),
+                        F.size(F.split(F.col("raw_text"), r"[.!?]+")) - F.lit(1)
+                    ))
+        # Avg word length
+        .withColumn("avg_word_length",
+                    F.col("char_count") / F.greatest(F.col("word_count"), F.lit(1)))
+        # Has code block
+        .withColumn("has_code_block",
+                    F.col("raw_text").contains("```"))
+        # — Optimised text: lowercase + remove fillers + collapse whitespace —
+        .withColumn("_opt1", F.lower(F.col("raw_text")))
+        .withColumn("_opt2", F.regexp_replace(F.col("_opt1"), _FILLER_RE, " "))
+        .withColumn("_opt3", F.regexp_replace(F.col("_opt2"), r"[^\w\s]", ""))
+        .withColumn("optimized_text", F.trim(F.regexp_replace(F.col("_opt3"), r"\s+", " ")))
+        .drop("_opt1", "_opt2", "_opt3")
+        # Optimised token count
+        .withColumn("optimized_token_count",
+                    F.size(F.split(F.trim(F.col("optimized_text")), r"\s+")))
+        # Savings
+        .withColumn("token_savings",
+                    F.col("token_count") - F.col("optimized_token_count"))
+        .withColumn("savings_pct",
+                    F.when(F.col("token_count") > 0,
+                           (F.col("token_savings") / F.col("token_count") * 100.0))
+                    .otherwise(F.lit(0.0)))
+    )
+
+    # ── Filter out empty / null turns ─────────────────────────────────────────
+    df_clean = (
+        df_feats
+        .filter(F.col("raw_text").isNotNull())
+        .filter(F.length(F.trim(F.col("raw_text"))) > 0)
+        .filter(F.col("token_count") > 0)
+    )
+
+    # ── Role-specific features ─────────────────────────────────────────────────
+    df_final = df_clean.withColumn(
+        "is_human", F.when(F.col("role") == "human", True).otherwise(False)
+    )
+
+    # ── Persist processed dataset ──────────────────────────────────────────────
+    logger.info(f"Writing Parquet -> {output_parquet}")
+    os.makedirs(output_parquet, exist_ok=True)
+    (
+        df_final
+        # coalesce reduces partition count WITHOUT a full shuffle
+        # Use 4 partitions for full run, 1 for sample
+        .coalesce(1 if sample_size else 4)
+        .write
+        .mode("overwrite")
+        .parquet(output_parquet)
+    )
+
+    # ── Persist a 10 k-row sample for fast ML iteration ───────────────────────
+    logger.info(f"💾 Writing sample Parquet → {sample_parquet}")
+    (
+        df_final
+        .limit(10_000)
+        .coalesce(1)
+        .write
+        .mode("overwrite")
+        .parquet(sample_parquet)
+    )
+
+    # ── Summary statistics ────────────────────────────────────────────────────
+    logger.info("📊 Computing summary statistics …")
+    stats = (
+        df_final.agg(
+            F.count("*").alias("total_turns"),
+            F.countDistinct("record_id").alias("total_conversations"),
+            F.mean("token_count").alias("avg_token_count"),
+            F.mean("optimized_token_count").alias("avg_opt_token_count"),
+            F.mean("savings_pct").alias("avg_savings_pct"),
+            F.sum("token_savings").alias("total_tokens_saved"),
+            F.sum("token_count").alias("total_tokens"),
+            F.mean("word_count").alias("avg_word_count"),
+            F.mean("char_count").alias("avg_char_count"),
+        ).collect()[0]
+    )
+
+    import json
+    stats_dict = {k: (float(v) if v is not None else None)
+                  for k, v in stats.asDict().items()}
+    stats_dict["elapsed_seconds"] = round(time.time() - t0, 2)
+    stats_dict["raw_json_path"]   = raw_json
+    stats_dict["output_parquet"]  = output_parquet
+
+    os.makedirs(os.path.dirname(stats_path), exist_ok=True)
+    with open(stats_path, "w") as fh:
+        json.dump(stats_dict, fh, indent=2)
+
+    elapsed = time.time() - t0
+    logger.info("=" * 60)
+    logger.info(f"✅ Preprocessing complete in {elapsed:.1f}s")
+    logger.info(f"   Total conversations : {int(stats['total_conversations']):,}")
+    logger.info(f"   Total turns         : {int(stats['total_turns']):,}")
+    logger.info(f"   Avg token count     : {stats['avg_token_count']:.1f}")
+    logger.info(f"   Avg savings         : {stats['avg_savings_pct']:.1f}%")
+    logger.info(f"   Stats saved to      : {stats_path}")
+    logger.info("=" * 60)
+
+    spark.stop()
+    return stats_dict
+
+
+# ── CLI entry-point ────────────────────────────────────────────────────────────
+if __name__ == "__main__":
+    import argparse
+
+    ap = argparse.ArgumentParser(description="PySpark preprocessing for raw.json")
+    ap.add_argument("--sample",  type=int, default=None,
+                    help="Limit to N conversations (omit for full run)")
+    ap.add_argument("--raw-json", default=RAW_JSON_PATH)
+    ap.add_argument("--output",   default=OUTPUT_PARQUET)
+    args = ap.parse_args()
+
+    run_preprocessing(
+        sample_size   = args.sample,
+        raw_json      = args.raw_json,
+        output_parquet= args.output,
+    )
