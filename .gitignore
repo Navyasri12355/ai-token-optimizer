@@ -23,6 +23,7 @@ Thumbs.db
 
 # ---- Data Files (BIG) ----
 data/raw.json
+data/raw.jsonl
 data/processed.csv
 data/*.csv
 data/_chunks_tmp/
