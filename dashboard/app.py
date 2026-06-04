@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 import requests
 import matplotlib.pyplot as plt
@@ -12,6 +13,10 @@ st.set_page_config(
 
 st.title("💡 LLM Token Cost Optimizer")
 st.markdown("Optimize prompts and predict LLM usage cost in real-time")
+
+# Read API URL from env (set to Azure Container Apps URL after deployment)
+# Default falls back to localhost for local dev
+API_URL = os.environ.get("API_URL", "http://127.0.0.1:8000")
 
 # ----------------------------
 # Input
@@ -28,7 +33,7 @@ if st.button("🚀 Analyze"):
     else:
         try:
             response = requests.post(
-                "http://127.0.0.1:8000/predict",
+                f"{API_URL}/predict",
                 params={"prompt": prompt}
             )
 

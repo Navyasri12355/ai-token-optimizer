@@ -1,0 +1,71 @@
+# cloud/aci_elk.yaml
+# ===================
+# Azure Container Instances container group spec.
+# Runs Elasticsearch + Kibana as two containers sharing localhost networking.
+# Both containers in the same group share the same IP address.
+#
+# Deploy with: bash cloud/aci_elk_setup.sh
+# OR:          az container create --resource-group <rg> --file cloud/aci_elk.yaml
+#
+# Kibana connects to ES at http://localhost:9200 (shared network namespace)
+# Public IP exposes ports 9200 (ES) and 5601 (Kibana)
+#
+# Cost: ~Standard_D2s_v3 equivalent = ~$0.10/hr from Azure credits
+# Stop when not in use: az container stop --name elk-stack --resource-group <rg>
+
+apiVersion: '2021-10-01'
+location: centralindia
+name: elk-stack
+properties:
+  containers:
+  - name: elasticsearch
+    properties:
+      image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+      resources:
+        requests:
+          cpu: 2.0
+          memoryInGb: 4.0
+      ports:
+      - port: 9200
+        protocol: TCP
+      - port: 9300
+        protocol: TCP
+      environmentVariables:
+      - name: discovery.type
+        value: single-node
+      - name: xpack.security.enabled
+        value: 'false'
+      - name: xpack.security.enrollment.enabled
+        value: 'false'
+      - name: ES_JAVA_OPTS
+        value: '-Xms1g -Xmx1g'
+      - name: bootstrap.memory_lock
+        value: 'false'
+  - name: kibana
+    properties:
+      image: docker.elastic.co/kibana/kibana:8.11.0
+      resources:
+        requests:
+          cpu: 1.0
+          memoryInGb: 2.0
+      ports:
+      - port: 5601
+        protocol: TCP
+      environmentVariables:
+      - name: ELASTICSEARCH_HOSTS
+        value: 'http://localhost:9200'
+      - name: XPACK_SECURITY_ENABLED
+        value: 'false'
+      - name: XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY
+        value: 'a7a6311933d3503b89bc2dbc36572c33a6c10925682e591bffcab6911c06786d'
+  ipAddress:
+    type: Public
+    dnsNameLabel: ai-token-optimizer-elk   # becomes: ai-token-optimizer-elk.<region>.azurecontainer.io
+    ports:
+    - port: 9200
+      protocol: TCP
+    - port: 5601
+      protocol: TCP
+  osType: Linux
+  restartPolicy: OnFailure
+type: Microsoft.ContainerInstance/containerGroups

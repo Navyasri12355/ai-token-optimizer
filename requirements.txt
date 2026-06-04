@@ -29,5 +29,8 @@ python-json-logger
 # Environment management
 python-dotenv
 
+# Cloud — Azure Blob Storage (for Kaggle ↔ Azure data sync)
+azure-storage-blob>=12.0.0
+
 # Testing
 pytest
