@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+pandas
+numpy
+pyarrow
+tiktoken
+nltk
+pymongo

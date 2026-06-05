@@ -369,7 +369,9 @@ def main():
     ap.add_argument("--pricing-model",   default="gpt-4o",
                     choices=list(PRICING.keys()))
     ap.add_argument("--cv-folds",        type=int, default=3)
-    args = ap.parse_args()
+    args, unknown_args = ap.parse_known_args()
+    if unknown_args:
+        logger.info(f"Ignoring Databricks-injected args: {unknown_args}")
 
     run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
     _banner(f"AI Token Optimizer — Databricks [{run_id}]")

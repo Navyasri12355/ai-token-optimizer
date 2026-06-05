@@ -1,0 +1,6 @@
+FROM aitokenoptimizeracr.azurecr.io/token-optimizer-api:latest
+
+WORKDIR /app
+
+COPY spark/predict.py ./spark/predict.py
+COPY api/main.py ./api/main.py

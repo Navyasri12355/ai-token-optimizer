@@ -36,17 +36,21 @@ echo "   App      : $APP_NAME"
 echo "   Location : $LOCATION"
 echo ""
 
-# 1. Log in to ACR
-echo "[1/5] Logging in to ACR..."
-az acr login --name "$ACR_NAME"
-
-# 2. Build Docker image from project root
-echo "[2/5] Building Docker image..."
-docker build -f cloud/Dockerfile -t "$IMAGE" .
-
-# 3. Push to ACR
-echo "[3/5] Pushing image to ACR..."
-docker push "$IMAGE"
+# 1-3. Build and publish Docker image
+echo "[1/5] Publishing image to ACR..."
+if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+  echo "   Using local Docker daemon."
+  az acr login --name "$ACR_NAME"
+  docker build -f cloud/Dockerfile -t "$IMAGE" .
+  docker push "$IMAGE"
+else
+  echo "   Local Docker daemon unavailable; using Azure ACR remote build."
+  az acr build \
+    --registry "$ACR_NAME" \
+    --image "token-optimizer-api:latest" \
+    --file cloud/Dockerfile \
+    .
+fi
 
 # 4. Create Container Apps Environment (if not exists)
 echo "[4/5] Creating Container Apps environment..."

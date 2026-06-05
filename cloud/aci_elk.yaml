@@ -30,17 +30,13 @@ properties:
         protocol: TCP
       - port: 9300
         protocol: TCP
+      command:
+      - /bin/bash
+      - -c
+      - bin/elasticsearch -Ediscovery.type=single-node -Expack.security.enabled=false -Expack.security.enrollment.enabled=false -Ebootstrap.memory_lock=false
       environmentVariables:
-      - name: discovery.type
-        value: single-node
-      - name: xpack.security.enabled
-        value: 'false'
-      - name: xpack.security.enrollment.enabled
-        value: 'false'
       - name: ES_JAVA_OPTS
         value: '-Xms1g -Xmx1g'
-      - name: bootstrap.memory_lock
-        value: 'false'
   - name: kibana
     properties:
       image: docker.elastic.co/kibana/kibana:8.11.0
