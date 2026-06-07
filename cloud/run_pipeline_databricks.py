@@ -18,6 +18,7 @@ import argparse
 import json
 import logging
 import os
+import shlex
 import sys
 import time
 import traceback
@@ -547,6 +548,10 @@ def run_cost_analysis(spark, sample_mode=False, pricing_model="gpt-4o"):
 
 # ── Main ───────────────────────────────────────────────────────────────────────
 def main():
+    pipeline_args = os.environ.get("PIPELINE_ARGS", "").strip()
+    if pipeline_args:
+        sys.argv.extend(shlex.split(pipeline_args))
+
     ap = argparse.ArgumentParser(description="Azure Databricks pipeline")
     ap.add_argument("--sample", action="store_true")
     ap.add_argument("--sample-size", type=int, default=50_000)

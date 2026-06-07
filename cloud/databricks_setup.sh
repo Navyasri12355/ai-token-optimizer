@@ -165,7 +165,8 @@ payload = {
       'AZURE_CONTAINER':       os.environ.get('AZURE_CONTAINER', ''),
       'ES_HOST':               es_host,
       'ES_PORT':               os.environ.get('ES_PORT', '9200'),
-      'SERVICE_NAME':          'ai-token-optimizer-databricks'
+      'SERVICE_NAME':          'ai-token-optimizer-databricks',
+      'PIPELINE_ARGS':         os.environ.get('PIPELINE_ARGS', '')
     }
   },
   'notebook_task': {
