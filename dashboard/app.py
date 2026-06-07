@@ -1,22 +1,22 @@
 import os
-import streamlit as st
-import requests
+
 import matplotlib.pyplot as plt
+import requests
+import streamlit as st
 
 # ----------------------------
 # Page Config
 # ----------------------------
-st.set_page_config(
-    page_title="LLM Cost Optimizer",
-    layout="wide"
-)
+st.set_page_config(page_title="LLM Cost Optimizer", layout="wide")
 
 st.title("💡 LLM Token Cost Optimizer")
 st.markdown("Optimize prompts and predict LLM usage cost in real-time")
 
-# Read API URL from env (set to Azure Container Apps URL after deployment)
-# Default falls back to localhost for local dev
-API_URL = os.environ.get("API_URL", "http://127.0.0.1:8000")
+# Read API URL from Streamlit secrets or env.
+# Default falls back to localhost for local dev.
+API_URL = (
+    st.secrets.get("API_URL") or os.environ.get("API_URL") or "http://127.0.0.1:8000"
+)
 
 # ----------------------------
 # Input
@@ -27,15 +27,11 @@ prompt = st.text_area("📝 Enter your prompt", height=150)
 # Analyze Button
 # ----------------------------
 if st.button("🚀 Analyze"):
-
     if prompt.strip() == "":
         st.warning("Please enter a prompt.")
     else:
         try:
-            response = requests.post(
-                f"{API_URL}/predict",
-                params={"prompt": prompt}
-            )
+            response = requests.post(f"{API_URL}/predict", params={"prompt": prompt})
 
             res = response.json()
 
