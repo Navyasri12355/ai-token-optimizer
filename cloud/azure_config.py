@@ -150,18 +150,29 @@ class AzureConfig:
         local_root.mkdir(parents=True, exist_ok=True)
 
         prefix = blob_prefix.rstrip("/") + "/"
+        blobs = list(cc.list_blobs(name_starts_with=prefix))
+        blob_names = {blob.name for blob in blobs}
         count = 0
 
-        for blob in cc.list_blobs(name_starts_with=prefix):
+        for blob in blobs:
             relative_path = blob.name[len(prefix) :]
             if not relative_path:
+                continue
+
+            # Spark/Databricks may emit zero-byte directory marker blobs such as
+            # `models/cv_ridge_token_count`. Skip any blob that is also a parent
+            # of another blob path.
+            if any(other_name.startswith(blob.name + "/") for other_name in blob_names):
                 continue
 
             destination = local_root / relative_path
             destination.parent.mkdir(parents=True, exist_ok=True)
 
-            if destination.exists() and not overwrite:
-                continue
+            if destination.exists():
+                if destination.is_dir():
+                    continue
+                if not overwrite:
+                    continue
 
             with open(destination, "wb") as f:
                 f.write(cc.download_blob(blob.name).readall())
