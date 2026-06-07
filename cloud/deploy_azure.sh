@@ -85,8 +85,8 @@ ENV_VARS=(
   "AZURE_CONTAINER_ENV=$ENV_NAME"
   "ES_HOST=${ES_HOST:-http://localhost:9200}"
   "KIBANA_URL=${KIBANA_URL:-http://localhost:5601}"
-  "AZURE_MODELS_BLOB_PREFIX=${AZURE_MODELS_BLOB_PREFIX:-models}"
-  "MODEL_CACHE_DIR=${MODEL_CACHE_DIR:-/tmp/ai-token-optimizer-models}"
+  "AZURE_MODELS_BLOB_PREFIX=models"
+  "MODEL_CACHE_DIR=/tmp/ai-token-optimizer-models"
 )
 
 if az containerapp show --name "$APP_NAME" --resource-group "$RESOURCE_GROUP" >/dev/null 2>&1; then
