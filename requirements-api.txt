@@ -6,3 +6,4 @@ pyarrow
 tiktoken
 nltk
 pymongo
+azure-storage-blob>=12.0.0

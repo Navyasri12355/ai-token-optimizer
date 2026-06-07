@@ -7,8 +7,9 @@ COPY requirements-api.txt .
 RUN pip install --no-cache-dir -r requirements-api.txt
 
 COPY api/           ./api/
-COPY spark/__init__.py spark/predict.py ./spark/
-COPY spark/models/  ./spark/models/
+COPY cloud/         ./cloud/
+COPY spark/__init__.py ./spark/
+COPY spark/predict.py ./spark/
 COPY optimizer.py   .
 
 RUN python -c "import nltk; nltk.download('stopwords', quiet=True)"

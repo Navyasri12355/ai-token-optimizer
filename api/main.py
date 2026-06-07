@@ -1,7 +1,8 @@
 """
 FastAPI service for the AI Token Optimizer.
 
-Model backend: Spark MLlib PipelineModels (spark/models/).
+Model backend: exported Spark MLlib PipelineModels.
+At runtime, model artifacts can be loaded from Azure Blob into a local cache.
 No sklearn or pickle dependencies.
 """
 
@@ -10,8 +11,10 @@ from __future__ import annotations
 import os
 import threading
 
+import pandas as pd
 from fastapi import FastAPI, Query
 
+from cloud.model_sync import ensure_models_available
 from optimizer import PromptOptimizer
 
 # ---------------------------------------------------------------------------
@@ -27,9 +30,10 @@ def _get_predictor():
     if _predictor is None:
         with _predictor_lock:
             if _predictor is None:
-                # Import here so FastAPI workers don't start Spark at import time
                 from spark.predict import TokenPredictor
-                _predictor = TokenPredictor(model_dir="spark/models")
+
+                model_dir = ensure_models_available()
+                _predictor = TokenPredictor(model_dir=str(model_dir))
     return _predictor
 
 
@@ -42,6 +46,7 @@ def _count_tokens(text: str) -> int:
         return len(enc.encode(text))
     except Exception:
         return max(1, int(len(text.split()) * 1.3))
+
 
 # ---------------------------------------------------------------------------
 # App
@@ -58,8 +63,9 @@ app = FastAPI(
 _db_collection = None
 try:
     from pymongo import MongoClient
+
     _client = MongoClient("mongodb://localhost:27017/", serverSelectionTimeoutMS=2000)
-    _client.admin.command("ping")          # probe connectivity
+    _client.admin.command("ping")  # probe connectivity
     _db_collection = _client["llm_optimizer"]["logs"]
     print("✅  MongoDB connected — request logging enabled")
 except Exception:
@@ -72,6 +78,7 @@ optimizer = PromptOptimizer()
 # Routes
 # ---------------------------------------------------------------------------
 
+
 @app.get("/")
 def home():
     return {"message": "AI Token Optimizer API is running", "version": "2.0.0"}
@@ -81,8 +88,12 @@ def home():
 def health():
     """Readiness probe — checks that models are loadable."""
     try:
-        _get_predictor()
-        return {"status": "ok", "models": "spark/models"}
+        predictor = _get_predictor()
+        return {
+            "status": "ok",
+            "models": str(getattr(predictor, "model_dir", "unknown")),
+            "source": "azure-blob-cache",
+        }
     except Exception as exc:
         return {"status": "error", "detail": str(exc)}
 
@@ -98,61 +109,64 @@ def predict(prompt: str = Query(..., description="The raw prompt text")):
     # ------------------------------------------------------------------
     # 1. Feature extraction (mirrored from preprocess.py UDFs)
     # ------------------------------------------------------------------
-    text_len    = len(prompt_clean)
+    text_len = len(prompt_clean)
     context_len = text_len
-    words       = prompt_clean.split()
-    num_words   = len(words)
+    words = prompt_clean.split()
+    num_words = len(words)
     avg_word_len = (
-        float(sum(len(w) for w in words)) / float(num_words)
-        if num_words else 0.0
+        float(sum(len(w) for w in words)) / float(num_words) if num_words else 0.0
     )
     question_words = {"what", "why", "how", "explain", "describe"}
-    question_flag  = int(any(q in prompt_clean.lower() for q in question_words))
+    question_flag = int(any(q in prompt_clean.lower() for q in question_words))
 
     # ------------------------------------------------------------------
     # 2. Token prediction via Spark MLlib
     # ------------------------------------------------------------------
-    import pandas as pd
 
-    features = pd.DataFrame([{
-        "context_len":   float(context_len),
-        "text_len":      float(text_len),
-        "num_words":     float(num_words),
-        "avg_word_len":  avg_word_len,
-        "question_flag": float(question_flag),
-    }])
+    features = pd.DataFrame(
+        [
+            {
+                "context_len": float(context_len),
+                "text_len": float(text_len),
+                "num_words": float(num_words),
+                "avg_word_len": avg_word_len,
+                "question_flag": float(question_flag),
+            }
+        ]
+    )
 
     predictor = _get_predictor()
     token_pred = predictor.predict(features)
-    input_tokens  = token_pred["input_tokens"]
+    input_tokens = token_pred["input_tokens"]
     output_tokens = token_pred["output_tokens"]
 
     # ------------------------------------------------------------------
     # 3. Cost calculation
     # ------------------------------------------------------------------
-    INPUT_PRICE_PER_1K  = 0.0015   # USD per 1 K input tokens
-    OUTPUT_PRICE_PER_1K = 0.002    # USD per 1 K output tokens
+    INPUT_PRICE_PER_1K = 0.0015  # USD per 1 K input tokens
+    OUTPUT_PRICE_PER_1K = 0.002  # USD per 1 K output tokens
 
-    cost = (
-        (input_tokens  / 1000) * INPUT_PRICE_PER_1K +
-        (output_tokens / 1000) * OUTPUT_PRICE_PER_1K
-    )
+    cost = (input_tokens / 1000) * INPUT_PRICE_PER_1K + (
+        output_tokens / 1000
+    ) * OUTPUT_PRICE_PER_1K
 
     # ------------------------------------------------------------------
     # 4. Prompt optimisation
     # ------------------------------------------------------------------
     optimized_prompt = optimizer.optimize(prompt_clean)
 
-    original_tokens  = _count_tokens(prompt_clean)
+    original_tokens = _count_tokens(prompt_clean)
     optimized_tokens = _count_tokens(optimized_prompt)
 
     token_savings = (
         ((original_tokens - optimized_tokens) / original_tokens * 100)
-        if original_tokens else 0.0
+        if original_tokens
+        else 0.0
     )
     char_savings = (
         ((len(prompt_clean) - len(optimized_prompt)) / len(prompt_clean) * 100)
-        if prompt_clean else 0.0
+        if prompt_clean
+        else 0.0
     )
 
     # ------------------------------------------------------------------
@@ -160,12 +174,14 @@ def predict(prompt: str = Query(..., description="The raw prompt text")):
     # ------------------------------------------------------------------
     if _db_collection is not None:
         try:
-            _db_collection.insert_one({
-                "prompt":        prompt_clean,
-                "input_tokens":  input_tokens,
-                "output_tokens": output_tokens,
-                "cost":          round(cost, 6),
-            })
+            _db_collection.insert_one(
+                {
+                    "prompt": prompt_clean,
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                    "cost": round(cost, 6),
+                }
+            )
         except Exception:
             pass
 
@@ -173,11 +189,11 @@ def predict(prompt: str = Query(..., description="The raw prompt text")):
     # 6. Response
     # ------------------------------------------------------------------
     return {
-        "input_tokens":           input_tokens,
-        "output_tokens":          output_tokens,
-        "total_tokens":           input_tokens + output_tokens,
-        "estimated_cost":         round(cost, 6),
-        "optimized_prompt":       optimized_prompt,
-        "token_savings_percent":  round(token_savings, 2),
-        "compression_percent":    round(char_savings, 2),
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": input_tokens + output_tokens,
+        "estimated_cost": round(cost, 6),
+        "optimized_prompt": optimized_prompt,
+        "token_savings_percent": round(token_savings, 2),
+        "compression_percent": round(char_savings, 2),
     }
