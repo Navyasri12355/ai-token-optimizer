@@ -33,8 +33,9 @@ ACR_NAME="${AZURE_ACR_NAME}"
 APP_NAME="${AZURE_CONTAINER_APP:-token-optimizer-api}"
 ENV_NAME="${AZURE_CONTAINER_ENV:-token-optimizer-env}"
 IMAGE_REPO="token-optimizer-api"
-IMAGE_TAG="latest"
+IMAGE_TAG="${IMAGE_TAG:-$(date +%Y%m%d%H%M%S)}"
 IMAGE="$ACR_NAME.azurecr.io/$IMAGE_REPO:$IMAGE_TAG"
+LATEST_IMAGE="$ACR_NAME.azurecr.io/$IMAGE_REPO:latest"
 DOCKERFILE="cloud/Dockerfile.api"
 
 echo "=== Deploying FastAPI to Azure Container Apps ==="
@@ -43,6 +44,7 @@ echo "   App        : $APP_NAME"
 echo "   Env        : $ENV_NAME"
 echo "   Location   : $LOCATION"
 echo "   Dockerfile : $DOCKERFILE"
+echo "   Image tag  : $IMAGE_TAG"
 echo ""
 
 # 1-3. Build and publish Docker image
@@ -50,8 +52,9 @@ echo "[1/5] Publishing image to ACR..."
 if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
   echo "   Using local Docker daemon."
   az acr login --name "$ACR_NAME"
-  docker build -f "$DOCKERFILE" -t "$IMAGE" .
+  docker build -f "$DOCKERFILE" -t "$IMAGE" -t "$LATEST_IMAGE" .
   docker push "$IMAGE"
+  docker push "$LATEST_IMAGE"
 else
   echo "   Local Docker daemon unavailable; using Azure ACR remote build."
   az acr build \
