@@ -67,26 +67,50 @@ WORKSPACE_SCRIPT_PATH="/Users/$CURRENT_USER/run_pipeline_databricks"
 dbx_api() {
   local method="$1"
   local path="$2"
-  local data="$3"
+  curl -s -X "$method" \
+    "https://$WORKSPACE_URL/api/$path" \
+    -H "Authorization: Bearer $AAD_TOKEN" \
+    -H "Content-Type: application/json"
+}
+
+dbx_api_file() {
+  local method="$1"
+  local path="$2"
+  local payload_file="$3"
   curl -s -X "$method" \
     "https://$WORKSPACE_URL/api/$path" \
     -H "Authorization: Bearer $AAD_TOKEN" \
     -H "Content-Type: application/json" \
-    ${data:+-d "$data"}
+    -d "@$payload_file"
 }
 
 # ── 4. Upload pipeline script via DBFS REST API ───────────────────────────────
 echo "[3/4] Uploading pipeline script to workspace files..."
 
-# Encode file to base64 (single line, no wrapping)
-SCRIPT_B64=$("$PYTHON_BIN" -c "
-import base64, sys
-with open('cloud/run_pipeline_databricks.py', 'rb') as f:
-    print(base64.b64encode(b'# Databricks notebook source\n' + f.read()).decode())
-")
+UPLOAD_PAYLOAD_FILE=$(mktemp)
+"$PYTHON_BIN" - "$CURRENT_USER" "$UPLOAD_PAYLOAD_FILE" <<'PY'
+import base64
+import json
+import sys
 
-UPLOAD_RESP=$(dbx_api POST "2.0/workspace/import" \
-  "{\"path\": \"$WORKSPACE_SCRIPT_PATH\", \"format\": \"SOURCE\", \"language\": \"PYTHON\", \"overwrite\": true, \"content\": \"$SCRIPT_B64\"}")
+current_user = sys.argv[1]
+payload_path = sys.argv[2]
+workspace_script_path = '/' + 'Users/' + current_user + '/run_pipeline_databricks'
+with open('cloud/run_pipeline_databricks.py', 'rb') as f:
+    content = base64.b64encode(b'# Databricks notebook source\n' + f.read()).decode()
+payload = {
+    'path': workspace_script_path,
+    'format': 'SOURCE',
+    'language': 'PYTHON',
+    'overwrite': True,
+    'content': content,
+}
+with open(payload_path, 'w', encoding='utf-8') as f:
+    json.dump(payload, f)
+PY
+
+UPLOAD_RESP=$(dbx_api_file POST "2.0/workspace/import" "$UPLOAD_PAYLOAD_FILE")
+rm -f "$UPLOAD_PAYLOAD_FILE"
 
 # Check for error in response
 UPLOAD_ERR=$(echo "$UPLOAD_RESP" | "$PYTHON_BIN" -c "
@@ -107,8 +131,18 @@ echo "   Uploaded → $WORKSPACE_SCRIPT_PATH"
 # ── 5. Submit one-time run with a Job Cluster ──────────────────────────────────
 echo "[4/4] Submitting pipeline job (Job Cluster)..."
 
-RUN_PAYLOAD=$("$PYTHON_BIN" -c "
-import json, os, shlex
+RUN_PAYLOAD_FILE=$(mktemp)
+"$PYTHON_BIN" - "$CURRENT_USER" "$RUN_PAYLOAD_FILE" <<'PY'
+import json
+import os
+import sys
+
+current_user = sys.argv[1]
+payload_path = sys.argv[2]
+workspace_script_path = '/' + 'Users/' + current_user + '/run_pipeline_databricks'
+es_host = os.environ.get('ES_HOST', 'http://ai-token-optimizer-elk.centralindia.azurecontainer.io:9200')
+if es_host in ('localhost', 'http://localhost:9200', 'https://localhost:9200'):
+    es_host = 'http://ai-token-optimizer-elk.centralindia.azurecontainer.io:9200'
 payload = {
   'run_name': 'token-optimizer-pipeline',
   'new_cluster': {
@@ -116,7 +150,7 @@ payload = {
     'node_type_id': 'Standard_D4s_v3',
     'num_workers': 0,
     'data_security_mode': 'SINGLE_USER',
-    'single_user_name': '${CURRENT_USER}',
+    'single_user_name': current_user,
     'spark_conf': {
       'spark.master': 'local[*, 4]',
       'spark.databricks.cluster.profile': 'singleNode',
@@ -128,17 +162,22 @@ payload = {
     'spark_env_vars': {
       'AZURE_STORAGE_ACCOUNT': os.environ.get('AZURE_STORAGE_ACCOUNT', ''),
       'AZURE_STORAGE_KEY':     os.environ.get('AZURE_STORAGE_KEY', ''),
-      'AZURE_CONTAINER':       os.environ.get('AZURE_CONTAINER', '')
+      'AZURE_CONTAINER':       os.environ.get('AZURE_CONTAINER', ''),
+      'ES_HOST':               es_host,
+      'ES_PORT':               os.environ.get('ES_PORT', '9200'),
+      'SERVICE_NAME':          'ai-token-optimizer-databricks'
     }
   },
   'notebook_task': {
-    'notebook_path': '${WORKSPACE_SCRIPT_PATH}'
+    'notebook_path': workspace_script_path
   }
 }
-print(json.dumps(payload))
-")
+with open(payload_path, 'w', encoding='utf-8') as f:
+    json.dump(payload, f)
+PY
 
-RUN_RAW=$(dbx_api POST "2.1/jobs/runs/submit" "$RUN_PAYLOAD")
+RUN_RAW=$(dbx_api_file POST "2.1/jobs/runs/submit" "$RUN_PAYLOAD_FILE")
+rm -f "$RUN_PAYLOAD_FILE"
 
 RUN_ID=$(echo "$RUN_RAW" | "$PYTHON_BIN" -c "
 import sys, json

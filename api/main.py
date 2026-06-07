@@ -10,10 +10,12 @@ from __future__ import annotations
 
 import os
 import threading
+import time
 
 import pandas as pd
 from fastapi import FastAPI, Query
 
+from cloud.elastic_events import push_event, timed_ms
 from cloud.model_sync import ensure_models_available
 from optimizer import PromptOptimizer
 
@@ -81,20 +83,50 @@ optimizer = PromptOptimizer()
 
 @app.get("/")
 def home():
+    push_event(
+        "token-optimizer-logs",
+        "api_request",
+        {"endpoint": "/", "method": "GET", "status_code": 200},
+    )
     return {"message": "AI Token Optimizer API is running", "version": "2.0.0"}
 
 
 @app.get("/health")
 def health():
     """Readiness probe — checks that models are loadable."""
+    start = time.perf_counter()
     try:
         predictor = _get_predictor()
-        return {
+        response = {
             "status": "ok",
             "models": str(getattr(predictor, "model_dir", "unknown")),
             "source": "azure-blob-cache",
         }
+        push_event(
+            "token-optimizer-logs",
+            "api_health_check",
+            {
+                "endpoint": "/health",
+                "method": "GET",
+                "status_code": 200,
+                "response_time_ms": timed_ms(start),
+                "model_source": "azure-blob-cache",
+                "model_dir": response["models"],
+            },
+        )
+        return response
     except Exception as exc:
+        push_event(
+            "token-optimizer-logs",
+            "api_health_check",
+            {
+                "endpoint": "/health",
+                "method": "GET",
+                "status_code": 503,
+                "response_time_ms": timed_ms(start),
+                "error": str(exc),
+            },
+        )
         return {"status": "error", "detail": str(exc)}
 
 
@@ -104,6 +136,7 @@ def predict(prompt: str = Query(..., description="The raw prompt text")):
     Predict input/output token counts and estimated cost, and return an
     optimised version of the prompt.
     """
+    request_start = time.perf_counter()
     prompt_clean = prompt.strip()
 
     # ------------------------------------------------------------------
@@ -185,10 +218,7 @@ def predict(prompt: str = Query(..., description="The raw prompt text")):
         except Exception:
             pass
 
-    # ------------------------------------------------------------------
-    # 6. Response
-    # ------------------------------------------------------------------
-    return {
+    response = {
         "input_tokens": input_tokens,
         "output_tokens": output_tokens,
         "total_tokens": input_tokens + output_tokens,
@@ -197,3 +227,39 @@ def predict(prompt: str = Query(..., description="The raw prompt text")):
         "token_savings_percent": round(token_savings, 2),
         "compression_percent": round(char_savings, 2),
     }
+
+    latency_ms = timed_ms(request_start)
+    push_event(
+        "metrics",
+        "prediction",
+        {
+            "model_name": "azure_blob_spark_export",
+            "endpoint": "/predict",
+            "method": "POST",
+            "status_code": 200,
+            "response_time_ms": latency_ms,
+            "prediction_time_ms": latency_ms,
+            "prompt_chars": len(prompt_clean),
+            "prompt_words": num_words,
+            "optimized_prompt_chars": len(optimized_prompt),
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "total_tokens": input_tokens + output_tokens,
+            "estimated_cost": round(cost, 6),
+            "token_savings_percent": round(token_savings, 2),
+            "compression_percent": round(char_savings, 2),
+            "question_flag": question_flag,
+        },
+    )
+    push_event(
+        "token-optimizer-logs",
+        "api_request",
+        {
+            "endpoint": "/predict",
+            "method": "POST",
+            "status_code": 200,
+            "response_time_ms": latency_ms,
+        },
+    )
+
+    return response

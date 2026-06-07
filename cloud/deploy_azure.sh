@@ -83,8 +83,10 @@ ENV_VARS=(
   "AZURE_ACR_NAME=$ACR_NAME"
   "AZURE_CONTAINER_APP=$APP_NAME"
   "AZURE_CONTAINER_ENV=$ENV_NAME"
-  "ES_HOST=${ES_HOST:-http://localhost:9200}"
-  "KIBANA_URL=${KIBANA_URL:-http://localhost:5601}"
+  "ES_HOST=http://ai-token-optimizer-elk.centralindia.azurecontainer.io:9200"
+  "ES_PORT=9200"
+  "KIBANA_URL=http://ai-token-optimizer-elk.centralindia.azurecontainer.io:5601"
+  "SERVICE_NAME=ai-token-optimizer-api"
   "AZURE_MODELS_BLOB_PREFIX=models"
   "MODEL_CACHE_DIR=/tmp/ai-token-optimizer-models"
 )
