@@ -107,13 +107,13 @@ def setup_kibana():
     
     try:
         # Import and run setup
-        from kibana_setup import KibanaSetup
+        from monitoring.kibana_setup import KibanaSetup
         setup = KibanaSetup()
         setup.setup_default_dashboards()
         return True
     except ImportError:
         print("⚠️ Could not import kibana_setup. Running it separately...")
-        return run_command("python kibana_setup.py", "Kibana dashboard setup")
+        return run_command("python monitoring/kibana_setup.py", "Kibana dashboard setup")
     except Exception as e:
         print(f"⚠️ Kibana setup encountered an issue: {e}")
         return False
@@ -122,8 +122,8 @@ def test_logging():
     """Test logging and metrics"""
     print("\n🧪 Testing logging and metrics...")
     try:
-        from logging_config import setup_logging
-        from metrics import get_metrics_collector
+        from monitoring.logging_config import setup_logging
+        from monitoring.metrics import get_metrics_collector
         
         logger = setup_logging()
         logger.info("✅ Logging test message")
@@ -178,8 +178,8 @@ def main():
     print("2. Create index patterns for your data")
     print("3. Build custom dashboards")
     print("4. Integrate logging into your code:")
-    print("   from logging_config import setup_logging")
-    print("   from metrics import get_metrics_collector")
+    print("   from monitoring.logging_config import setup_logging")
+    print("   from monitoring.metrics import get_metrics_collector")
     print("\n📖 Full Documentation: ELASTICSEARCH_KIBANA_SETUP.md")
     print("\n🛑 To stop services:")
     print("   docker-compose down")

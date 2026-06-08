@@ -33,7 +33,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 try:
-    from spark.elk_logger import get_elk_logger
+    from monitoring.elk_logger import get_elk_logger
     logger = get_elk_logger("cost_analysis")
 except Exception:
     logging.basicConfig(level=logging.INFO,
@@ -216,7 +216,7 @@ def run_cost_analysis(
     # ── Push to ELK ───────────────────────────────────────────────────────────
     if push_to_elk:
         try:
-            from metrics import MetricsCollector
+            from monitoring.metrics import MetricsCollector
             mc = MetricsCollector()
             mc.record_data_processing(
                 operation="cost_analysis",

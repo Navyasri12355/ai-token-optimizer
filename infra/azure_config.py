@@ -1,13 +1,12 @@
 """
-cloud/azure_config.py
+infra/azure_config.py
 ======================
 Central Azure configuration — all storage paths and service endpoints.
-Replace cloud/gcp_config.py entirely.
 
 Set these via environment variables or edit the defaults below.
 
 Usage:
-    from cloud.azure_config import cfg
+    from infra.azure_config import cfg
     blob_client = cfg.get_blob_client()
     print(cfg.OUTPUT_PARQUET_PATH)   # wasbs:// path for Spark
 """

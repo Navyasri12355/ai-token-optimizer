@@ -1,6 +1,6 @@
 """
-spark/elk_logger.py
-====================
+monitoring/elk_logger.py
+========================
 ELK-integrated structured logger for all Spark pipeline scripts.
 
 Features
@@ -11,7 +11,7 @@ Features
 - Index pattern: token-optimizer-logs-YYYY.MM.DD
 
 Usage:
-    from spark.elk_logger import get_elk_logger
+    from monitoring.elk_logger import get_elk_logger
     logger = get_elk_logger("preprocess")
     logger.info("Step done", extra={"rows": 5000, "stage": "explode"})
 """

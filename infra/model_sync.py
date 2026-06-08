@@ -4,7 +4,7 @@ import os
 import shutil
 from pathlib import Path
 
-from cloud.azure_config import cfg
+from infra.azure_config import cfg
 
 DEFAULT_MODEL_CACHE_DIR = os.getenv("MODEL_CACHE_DIR", "./.cache/models")
 DEFAULT_MODEL_BLOB_PREFIX = os.getenv("AZURE_MODELS_BLOB_PREFIX", cfg.MODELS_BLOB)

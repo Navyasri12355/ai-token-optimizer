@@ -73,27 +73,27 @@ class TestELKLogger(unittest.TestCase):
     """Test ELK logger – no ELK stack required (offline graceful fallback)."""
 
     def test_import(self):
-        from spark.elk_logger import get_elk_logger
+        from monitoring.elk_logger import get_elk_logger
         self.assertTrue(callable(get_elk_logger))
 
     def test_get_logger_returns_logger(self):
-        from spark.elk_logger import get_elk_logger
+        from monitoring.elk_logger import get_elk_logger
         lg = get_elk_logger("test_unit")
         self.assertIsNotNone(lg)
         self.assertTrue(hasattr(lg, "info"))
 
     def test_logger_caching(self):
-        from spark.elk_logger import get_elk_logger
+        from monitoring.elk_logger import get_elk_logger
         lg1 = get_elk_logger("cached_test")
         lg2 = get_elk_logger("cached_test")
         self.assertIs(lg1, lg2)
 
     def test_push_event_no_crash(self):
-        from spark.elk_logger import push_event
+        from monitoring.elk_logger import push_event
         push_event("unit_test", {"key": "value"}, es_host="localhost", es_port=19999)
 
     def test_ensure_kibana_index_patterns_no_crash(self):
-        from spark.elk_logger import ensure_kibana_index_patterns
+        from monitoring.elk_logger import ensure_kibana_index_patterns
         ensure_kibana_index_patterns(kibana_url="http://localhost:19999")
 
 
@@ -386,15 +386,15 @@ class TestKibanaDashboards(unittest.TestCase):
     """Unit tests for Kibana dashboard helpers (no live Kibana needed)."""
 
     def test_wait_for_kibana_false(self):
-        from spark.kibana_dashboards import wait_for_kibana
+        from monitoring.kibana_dashboards import wait_for_kibana
         self.assertFalse(wait_for_kibana("http://localhost:19999", retries=1))
 
     def test_create_data_view_no_crash(self):
-        from spark.kibana_dashboards import create_data_view
+        from monitoring.kibana_dashboards import create_data_view
         self.assertIsNone(create_data_view("test-*", kibana_url="http://localhost:19999"))
 
     def test_create_dashboard_no_crash(self):
-        from spark.kibana_dashboards import create_dashboard
+        from monitoring.kibana_dashboards import create_dashboard
         self.assertIsNone(create_dashboard("Test", [], kibana_url="http://localhost:19999"))
 
 

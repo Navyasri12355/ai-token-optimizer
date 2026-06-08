@@ -37,7 +37,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 try:
-    from spark.elk_logger import get_elk_logger
+    from monitoring.elk_logger import get_elk_logger
     logger = get_elk_logger("train_model")
 except Exception:
     logging.basicConfig(level=logging.INFO,
@@ -307,7 +307,7 @@ def train(
 
     # Push to ELK if available
     try:
-        from metrics import MetricsCollector
+        from monitoring.metrics import MetricsCollector
         mc = MetricsCollector()
         for name, m in results.items():
             mc.record_training_metrics(

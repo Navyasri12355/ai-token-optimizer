@@ -15,8 +15,8 @@ import time
 import pandas as pd
 from fastapi import FastAPI, Query
 
-from cloud.elastic_events import push_event, timed_ms
-from cloud.model_sync import ensure_models_available
+from monitoring.elastic_events import push_event, timed_ms
+from infra.model_sync import ensure_models_available
 from optimizer import PromptOptimizer
 
 # ---------------------------------------------------------------------------

@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from cloud.azure_config import cfg
+from infra.azure_config import cfg
 
 
 def main() -> int:

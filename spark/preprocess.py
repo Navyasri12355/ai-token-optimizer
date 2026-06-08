@@ -39,7 +39,7 @@ sys.path.insert(0, str(ROOT))
 
 # ELK logger (graceful fallback if ES is not running)
 try:
-    from spark.elk_logger import get_elk_logger
+    from monitoring.elk_logger import get_elk_logger
     logger = get_elk_logger("preprocess")
 except Exception:
     logging.basicConfig(level=logging.INFO,

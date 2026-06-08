@@ -33,7 +33,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 try:
-    from spark.elk_logger import get_elk_logger, push_event
+    from monitoring.elk_logger import get_elk_logger, push_event
     logger = get_elk_logger("pipeline")
 except Exception:
     logging.basicConfig(level=logging.INFO,
@@ -171,7 +171,7 @@ def run_pipeline(args):
 
     # ── Stage 4: Kibana Dashboards ─────────────────────────────────────────────
     if not args.skip_dashboards:
-        from spark.kibana_dashboards import setup_all_dashboards, wait_for_kibana
+        from monitoring.kibana_dashboards import setup_all_dashboards, wait_for_kibana
         if wait_for_kibana(args.kibana, retries=5):
             result, elapsed, err = _stage(
                 "Kibana Dashboards",
