@@ -1,10 +1,11 @@
 # AI Token Optimizer
 
-AI Token Optimizer is a cloud-deployed system for predicting LLM token usage, estimating request cost, and optimizing prompts to reduce token consumption. The project uses a Streamlit frontend, a FastAPI backend, Spark/Databricks for preprocessing and training, Azure Blob Storage for datasets and model artifacts, and Kibana/Elasticsearch for real monitoring dashboards.
+AI Token Optimizer is a cloud-deployed system for predicting LLM token usage, estimating request cost, and optimizing prompts to reduce token consumption. The project uses a React+Vite frontend (new), a FastAPI backend, Spark/Databricks for preprocessing and training, Azure Blob Storage for datasets and model artifacts, and Kibana/Elasticsearch for real monitoring dashboards.
 
 ## Live deployment
 
-- **Frontend:** https://ai-token-optimizer.streamlit.app/
+- **Frontend (React+Vite):** Deploy on Vercel (see deployment instructions below)
+- **Frontend (Legacy Streamlit):** https://ai-token-optimizer.streamlit.app/
 - **Backend API:** https://token-optimizer-api.jollywave-2ddd24b7.centralindia.azurecontainerapps.io
 - **API docs:** https://token-optimizer-api.jollywave-2ddd24b7.centralindia.azurecontainerapps.io/docs
 - **Kibana:** http://ai-token-optimizer-elk.centralindia.azurecontainer.io:5601
@@ -188,7 +189,36 @@ By default, the API runs at:
 http://127.0.0.1:8000
 ```
 
-### 4. Run the Streamlit dashboard locally
+### 4. Run the React+Vite dashboard locally
+
+Navigate to the frontend directory:
+
+```bash
+cd frontend
+```
+
+Install dependencies:
+
+```bash
+npm install
+```
+
+Set the backend URL:
+
+```bash
+# Create a .env file in the frontend directory
+echo "VITE_API_URL=http://127.0.0.1:8000" > .env
+```
+
+Start the development server:
+
+```bash
+npm run dev
+```
+
+The dashboard will be available at `http://localhost:3000`
+
+### 5. Run the Streamlit dashboard locally (legacy)
 
 ```bash
 streamlit run dashboard/app.py
@@ -206,7 +236,7 @@ On Windows PowerShell:
 $env:API_URL="http://127.0.0.1:8000"
 ```
 
-## Streamlit Cloud configuration
+## Streamlit Cloud configuration (legacy)
 
 The deployed Streamlit frontend connects to the Azure backend using the `API_URL` secret.
 
@@ -214,6 +244,42 @@ In Streamlit Cloud → App settings → Secrets, set:
 
 ```toml
 API_URL = "https://token-optimizer-api.jollywave-2ddd24b7.centralindia.azurecontainerapps.io"
+```
+
+## Vercel deployment (React+Vite frontend)
+
+### Deploy to Vercel
+
+1. **Install Vercel CLI** (optional):
+```bash
+npm install -g vercel
+```
+
+2. **Deploy from the frontend directory**:
+```bash
+cd frontend
+vercel
+```
+
+Or use the Vercel dashboard:
+- Push your code to GitHub
+- Import the repository in Vercel
+- Set the root directory to `frontend`
+- Configure environment variable `VITE_API_URL` to your Azure backend URL:
+  ```
+  VITE_API_URL=https://token-optimizer-api.jollywave-2ddd24b7.centralindia.azurecontainerapps.io
+  ```
+
+3. **Environment Variables**:
+In Vercel dashboard → Settings → Environment Variables, add:
+- `VITE_API_URL`: Your Azure backend API URL
+
+### Local Development with Vercel
+
+To test locally with Vercel:
+```bash
+cd frontend
+vercel dev
 ```
 
 ## Azure deployment workflow
@@ -387,7 +453,8 @@ token-optimizer-events-*
 ```text
 api/                    FastAPI backend
 cloud/                  Azure deployment, Databricks, model sync, monitoring utilities
-dashboard/              Streamlit frontend
+dashboard/              Streamlit frontend (legacy)
+frontend/               React+Vite frontend (new)
 data/                   Dataset loading and local data files
 spark/                  Spark preprocessing, training, prediction utilities
 ml/                     Additional model experiments

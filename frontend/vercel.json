@@ -1,0 +1,13 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "devCommand": "npm run dev",
+  "installCommand": "npm install",
+  "framework": "vite",
+  "env": {
+    "VITE_API_URL": {
+      "description": "Your Azure backend API URL",
+      "value": "https://token-optimizer-api.jollywave-2ddd24b7.centralindia.azurecontainerapps.io"
+    }
+  }
+}
