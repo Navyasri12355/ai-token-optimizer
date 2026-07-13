@@ -8,12 +8,14 @@ import TokenChart from './components/TokenChart';
 import CostProjection from './components/CostProjection';
 import { analyzePrompt } from './lib/api';
 import { useTheme } from './context/ThemeContext';
+import { MODELS, calculateCost } from './lib/models';
 
 function App() {
   const [prompt, setPrompt] = useState('');
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [selectedModel, setSelectedModel] = useState(MODELS[0]);
   const { darkMode, toggleDarkMode } = useTheme();
 
   // Load sample data on mount to show populated dashboard
@@ -22,14 +24,14 @@ function App() {
       input_tokens: 1250,
       output_tokens: 890,
       total_tokens: 2140,
-      estimated_cost: 0.003735,
+      estimated_cost: calculateCost(1250, 890, selectedModel),
       optimized_prompt: "Explain transformers in ML",
       token_savings_percent: 35.5,
       compression_percent: 28.2,
     };
     setResult(sampleData);
     setPrompt("Can you please explain to me in detail what transformers are in the context of machine learning and how they work?");
-  }, []);
+  }, [selectedModel]);
 
   const handleAnalyze = async () => {
     if (!prompt.trim()) {
@@ -43,6 +45,8 @@ function App() {
 
     try {
       const data = await analyzePrompt(prompt);
+      // Recalculate cost based on selected model
+      data.estimated_cost = calculateCost(data.input_tokens, data.output_tokens, selectedModel);
       setResult(data);
     } catch (err) {
       setError('API not running or error occurred. Please try again.');
@@ -96,6 +100,8 @@ function App() {
           onAnalyze={handleAnalyze}
           loading={loading}
           darkMode={darkMode}
+          selectedModel={selectedModel}
+          setSelectedModel={setSelectedModel}
         />
 
         {/* Error Message */}
@@ -124,7 +130,7 @@ function App() {
             <TokenBreakdown data={result} darkMode={darkMode} />
 
             {/* Cost Analysis */}
-            <CostAnalysis data={result} darkMode={darkMode} />
+            <CostAnalysis data={result} darkMode={darkMode} selectedModel={selectedModel} />
 
             {/* Token Chart */}
             <TokenChart data={result} darkMode={darkMode} />
