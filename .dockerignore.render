@@ -1,0 +1,22 @@
+# Docker ignore for Render deployment
+# Keep models, exclude everything else large
+
+.git
+.venv
+__pycache__
+*.pyc
+.env
+.env.*
+data/
+logs
+ml/*.pkl
+spark-warehouse
+metastore_db
+nltk_data
+output
+notebooks/
+docs/
+node_modules/
+**/node_modules/
+sample_data.json
+spark/output/

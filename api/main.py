@@ -14,6 +14,7 @@ import time
 
 import pandas as pd
 from fastapi import FastAPI, Query
+from fastapi.middleware.cors import CORSMiddleware
 
 from monitoring.elastic_events import push_event, timed_ms
 from infra.model_sync import ensure_models_available
@@ -34,7 +35,13 @@ def _get_predictor():
             if _predictor is None:
                 from spark.predict import TokenPredictor
 
-                model_dir = ensure_models_available()
+                # Try bundled models first (for containerized deployments)
+                bundled_models = Path("./models")
+                if bundled_models.exists():
+                    model_dir = bundled_models
+                else:
+                    # Fallback to Azure Blob download
+                    model_dir = ensure_models_available()
                 _predictor = TokenPredictor(model_dir=str(model_dir))
     return _predictor
 
@@ -57,6 +64,24 @@ app = FastAPI(
     title="AI Token Optimizer API",
     description="Predict LLM token usage with distributed Spark MLlib models.",
     version="2.0.0",
+)
+
+# ---------------------------------------------------------------------------
+# CORS
+# ---------------------------------------------------------------------------
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://ai-token-optimizer-ten.vercel.app",
+        "https://*.vercel.app",
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # ---------------------------------------------------------------------------
@@ -97,10 +122,13 @@ def health():
     start = time.perf_counter()
     try:
         predictor = _get_predictor()
+        model_dir = str(getattr(predictor, "model_dir", "unknown"))
+        # Detect source
+        model_source = "bundled" if "./models" in model_dir else "azure-blob-cache"
         response = {
             "status": "ok",
-            "models": str(getattr(predictor, "model_dir", "unknown")),
-            "source": "azure-blob-cache",
+            "models": model_dir,
+            "source": model_source,
         }
         push_event(
             "token-optimizer-logs",
@@ -110,8 +138,8 @@ def health():
                 "method": "GET",
                 "status_code": 200,
                 "response_time_ms": timed_ms(start),
-                "model_source": "azure-blob-cache",
-                "model_dir": response["models"],
+                "model_source": model_source,
+                "model_dir": model_dir,
             },
         )
         return response

@@ -1,0 +1,23 @@
+# Render deployment configuration
+services:
+  - type: web
+    name: ai-token-optimizer-api
+    env: docker
+    plan: free
+    dockerfilePath: ./Dockerfile.render
+    dockerContext: .
+    envVars:
+      - key: PORT
+        value: 10000
+      # Optional: MongoDB (for request logging)
+      - key: MONGODB_URI
+        value: mongodb://localhost:27017/
+        generateValue: false
+      # Optional: Azure Blob (if you want to sync models from cloud)
+      - key: AZURE_STORAGE_ACCOUNT
+        sync: false
+      - key: AZURE_STORAGE_KEY
+        sync: false
+      - key: AZURE_CONTAINER
+        value: pipeline-data
+        sync: false

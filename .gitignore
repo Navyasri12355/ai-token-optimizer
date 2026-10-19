@@ -22,18 +22,14 @@ Thumbs.db
 .idea/
 
 # ---- Data Files (BIG) ----
-data/raw.json
-data/raw.jsonl
-data/processed.csv
-data/*.csv
-data/_chunks_tmp/
-data/_chunk_progress.json
-data/processed.parquet/
-data/processed_enhanced.parquet/
+data/
 
 # ---- Models ----
 ml/*.pkl
-models/
+# models/ - TRACKED for containerized deployments (Render, Docker)
+# Only 63KB total, small enough to commit
+# Uncomment below to ignore if using Azure Blob sync instead
+# models/
 
 # ---- Spark ----
 spark-warehouse/
@@ -48,6 +44,12 @@ nltk_data/
 # ---- MongoDB Local Dumps ----
 dump/
 
+# ---- Kibana configs ----
+kibana/
+
+# ---- Notebooks ----
+notebooks/
+
 # ---- Misc ----
 *.tmp
 tmp/
@@ -56,3 +58,6 @@ tmp/
 
 # ---- Output files ----
 output/
+
+# ---- Large sample data ----
+sample_data.json
