@@ -3,11 +3,12 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # No Java needed — inference is pure numpy
-COPY requirements-api.txt .
+COPY infra/requirements-api.txt .
 RUN pip install --no-cache-dir -r requirements-api.txt
 
 COPY api/           ./api/
-COPY cloud/         ./cloud/
+COPY infra/         ./infra/
+COPY monitoring/    ./monitoring/
 COPY spark/__init__.py ./spark/
 COPY spark/predict.py ./spark/
 COPY optimizer.py   .

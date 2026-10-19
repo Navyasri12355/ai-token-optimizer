@@ -20,10 +20,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # App source
 COPY api/           ./api/
 COPY spark/         ./spark/
-COPY cloud/         ./cloud/
+COPY monitoring/    ./monitoring/
+COPY infra/         ./infra/
 COPY optimizer.py   .
-COPY metrics.py     .
-COPY logging_config.py .
 
 # Pre-download NLTK data
 RUN python -c "import nltk; nltk.download('stopwords', quiet=True)"

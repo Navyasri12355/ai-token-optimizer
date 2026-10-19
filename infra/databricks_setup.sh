@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# cloud/databricks_setup.sh
+# infra/databricks_setup.sh
 # ==========================
 # Creates Azure Databricks workspace (idempotent), uploads the pipeline
 # script via REST API, and submits a one-time Job Cluster run.
@@ -12,7 +12,7 @@
 #
 # Usage:
 #   source .env
-#   bash cloud/databricks_setup.sh [--sample]
+#   bash infra/databricks_setup.sh [--sample]
 
 set -e
 
@@ -49,7 +49,7 @@ WORKSPACE_URL=$(az databricks workspace show \
   --name "$WORKSPACE_NAME" \
   --resource-group "$RESOURCE_GROUP" \
   --query "workspaceUrl" \
-  --output tsv)
+  --output tsv | tr -d '\r')
 echo "   URL: https://$WORKSPACE_URL"
 
 # ── 3. Get Azure AD token (REST API auth) ─────────────────────────────────────
@@ -57,9 +57,9 @@ echo "[2/4] Getting Azure AD token..."
 AAD_TOKEN=$(az account get-access-token \
   --resource "2ff814a6-3304-4ab8-85cb-cd0e6f879c1d" \
   --query accessToken \
-  --output tsv)
+  --output tsv | tr -d '\r')
 
-CURRENT_USER=$(az account show --query user.name --output tsv)
+CURRENT_USER=$(az account show --query user.name --output tsv | tr -d '\r')
 echo "   User: $CURRENT_USER"
 WORKSPACE_SCRIPT_PATH="/Users/$CURRENT_USER/run_pipeline_databricks"
 
@@ -96,7 +96,7 @@ import sys
 current_user = sys.argv[1]
 payload_path = sys.argv[2]
 workspace_script_path = '/' + 'Users/' + current_user + '/run_pipeline_databricks'
-with open('cloud/run_pipeline_databricks.py', 'rb') as f:
+with open('infra/run_pipeline_databricks.py', 'rb') as f:
     content = base64.b64encode(b'# Databricks notebook source\n' + f.read()).decode()
 payload = {
     'path': workspace_script_path,
@@ -111,6 +111,7 @@ PY
 
 UPLOAD_RESP=$(dbx_api_file POST "2.0/workspace/import" "$UPLOAD_PAYLOAD_FILE")
 rm -f "$UPLOAD_PAYLOAD_FILE"
+echo "   Import response: $UPLOAD_RESP"
 
 # Check for error in response
 UPLOAD_ERR=$(echo "$UPLOAD_RESP" | "$PYTHON_BIN" -c "

@@ -15,7 +15,7 @@ if [ -z "$AZURE_STORAGE_ACCOUNT" ]; then
   exit 1
 fi
 
-JSONL_PATH="data/raw.jsonl"
+JSONL_PATH="${RAW_JSONL_PATH:-data/raw.jsonl}"
 
 if [ ! -f "$JSONL_PATH" ]; then
   echo "raw.jsonl not found. Converting raw.json first..."
