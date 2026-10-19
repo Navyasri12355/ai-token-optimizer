@@ -1,6 +1,6 @@
 # AI Token Optimizer
 
-AI Token Optimizer is a cloud-deployed system for predicting LLM token usage, estimating request cost, and optimizing prompts to reduce token consumption. The project uses a React+Vite frontend (new), a FastAPI backend, Spark/Databricks for preprocessing and training, Azure Blob Storage for datasets and model artifacts, and Kibana/Elasticsearch for real monitoring dashboards.
+AI Token Optimizer is a cloud-deployed system for predicting LLM token usage, estimating request cost, and optimizing prompts to reduce token consumption. The project uses a React+Vite frontend, a FastAPI backend, Spark/Databricks for preprocessing and training, Azure Blob Storage for datasets and model artifacts, and Kibana/Elasticsearch for real monitoring dashboards.
 
 ## Live deployment
 
@@ -23,7 +23,7 @@ AI Token Optimizer is a cloud-deployed system for predicting LLM token usage, es
 ## Architecture
 
 ```text
-Streamlit Cloud frontend
+React + Vite frontend
         |
         | HTTPS
         v
@@ -48,7 +48,7 @@ Elasticsearch + Kibana on Azure Container Instances
 
 | Component | Service | Purpose |
 |---|---|---|
-| Frontend | Streamlit Cloud | User interface for prompt analysis |
+| Frontend | React + Vite | User interface for prompt analysis |
 | Backend | Azure Container Apps | FastAPI prediction and optimization service |
 | Training pipeline | Azure Databricks | Spark preprocessing, training, and cost analysis |
 | Storage | Azure Blob Storage | Raw data, processed parquet, reports, model artifacts |
