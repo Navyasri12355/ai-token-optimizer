@@ -1,5 +1,5 @@
-// In production (Vercel), calls go through /api/proxy which forwards to Azure.
-// In local dev, falls back to direct Azure URL via VITE_API_URL.
+// In production (Vercel), calls go through /api/proxy which forwards to Render.
+// In local dev, falls back to the direct backend URL via VITE_API_URL.
 const IS_PROD = import.meta.env.PROD;
 const API_BASE = IS_PROD ? '' : (import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000');
 

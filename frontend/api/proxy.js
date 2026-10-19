@@ -1,11 +1,12 @@
-const AZURE_API = 'https://token-optimizer-api.braverock-2f6b3f25.centralindia.azurecontainerapps.io';
+// Update this to your Render backend URL
+const BACKEND_API = process.env.BACKEND_API_URL || 'https://ai-token-optimizer-1-o481.onrender.com';
 
 export default async function handler(req, res) {
   const { path = '', ...query } = req.query;
 
   // Build the upstream URL preserving the path and query params
   const queryString = new URLSearchParams(query).toString();
-  const upstreamUrl = `${AZURE_API}/${path}${queryString ? '?' + queryString : ''}`;
+  const upstreamUrl = `${BACKEND_API}/${path}${queryString ? '?' + queryString : ''}`;
 
   try {
     const response = await fetch(upstreamUrl, {
