@@ -4,11 +4,9 @@ AI Token Optimizer is a cloud-deployed system for predicting LLM token usage, es
 
 ## Live deployment
 
-- **Frontend (React+Vite):** Deploy on Vercel (see deployment instructions below)
-- **Frontend (Legacy Streamlit):** https://ai-token-optimizer.streamlit.app/
-- **Backend API:** https://token-optimizer-api.jollywave-2ddd24b7.centralindia.azurecontainerapps.io
-- **API docs:** https://token-optimizer-api.jollywave-2ddd24b7.centralindia.azurecontainerapps.io/docs
-- **Kibana:** http://ai-token-optimizer-elk.centralindia.azurecontainer.io:5601
+- **Frontend (React+Vite):** https://ai-token-optimizer-livid.vercel.app
+- **Backend API:** https://ai-token-optimizer-1-o481.onrender.com
+- **API docs:** https://ai-token-optimizer-1-o481.onrender.com/docs
 
 ## Features
 
@@ -467,8 +465,8 @@ docker-compose.yml      Local ELK/support services
 
 The project has been deployed and verified with:
 
-- Streamlit frontend running on Streamlit Cloud.
-- FastAPI backend running on Azure Container Apps.
+- React+Vite frontend running on Vercel.
+- FastAPI backend running on Render.
 - Databricks pipeline completed successfully and wrote models to Azure Blob Storage.
 - API loaded models from Azure Blob and returned successful predictions.
 - Elasticsearch/Kibana received real API inference, model training, data-processing, and cost-analysis metrics.
