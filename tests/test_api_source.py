@@ -2,6 +2,8 @@ import ast
 import unittest
 from pathlib import Path
 
+from api.model_paths import model_source
+
 
 class TestApiSource(unittest.TestCase):
     def test_api_imports_path_for_model_lookup(self):
@@ -16,3 +18,9 @@ class TestApiSource(unittest.TestCase):
         )
 
         self.assertTrue(imports_path)
+
+    def test_models_directory_is_reported_as_bundled(self):
+        self.assertEqual(model_source("models"), "bundled")
+
+    def test_other_model_directory_is_reported_as_blob_cache(self):
+        self.assertEqual(model_source(".cache/models"), "azure-blob-cache")

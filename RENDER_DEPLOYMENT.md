@@ -77,7 +77,7 @@ Expected response:
 ```json
 {
   "status": "ok",
-  "models": "./models",
+  "models": "models",
   "source": "bundled"
 }
 ```

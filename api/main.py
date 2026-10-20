@@ -20,6 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from monitoring.elastic_events import push_event, timed_ms
 from infra.model_sync import ensure_models_available
 from optimizer import PromptOptimizer
+from api.model_paths import model_source
 
 # ---------------------------------------------------------------------------
 # Lazy-loaded Spark predictor (initialised once on first request)
@@ -124,12 +125,11 @@ def health():
     try:
         predictor = _get_predictor()
         model_dir = str(getattr(predictor, "model_dir", "unknown"))
-        # Detect source
-        model_source = "bundled" if "./models" in model_dir else "azure-blob-cache"
+        source = model_source(model_dir)
         response = {
             "status": "ok",
             "models": model_dir,
-            "source": model_source,
+            "source": source,
         }
         push_event(
             "token-optimizer-logs",
@@ -139,7 +139,7 @@ def health():
                 "method": "GET",
                 "status_code": 200,
                 "response_time_ms": timed_ms(start),
-                "model_source": model_source,
+                "model_source": source,
                 "model_dir": model_dir,
             },
         )
