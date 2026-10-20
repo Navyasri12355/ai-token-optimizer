@@ -6,11 +6,5 @@
   "framework": "vite",
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api/proxy?path=:path*" }
-  ],
-  "env": {
-    "BACKEND_API_URL": {
-      "description": "Render backend API URL",
-      "value": "https://ai-token-optimizer-1-o481.onrender.com"
-    }
-  }
+  ]
 }
