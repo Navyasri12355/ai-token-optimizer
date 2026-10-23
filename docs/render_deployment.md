@@ -43,7 +43,7 @@ git push origin main
 1. Go to [Render Dashboard](https://dashboard.render.com)
 2. Click "New +" → "Web Service"
 3. Connect your GitHub repository
-4. Render will auto-detect `render.yaml` configuration
+4. Render will auto-detect `infra/render.yaml` configuration
 5. Deploy
 
 #### Option B: Manual Configuration
@@ -56,7 +56,7 @@ git push origin main
    - **Region**: Choose nearest region
    - **Branch**: `main`
    - **Runtime**: Docker
-   - **Dockerfile**: `Dockerfile.render`
+   - **Dockerfile**: `infra/Dockerfile.render`
    - **Instance Type**: Free (or Starter for production)
 5. Add Environment Variables (optional):
    - `MONGODB_URI` (if you want request logging)

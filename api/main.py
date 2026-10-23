@@ -19,7 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from monitoring.elastic_events import push_event, timed_ms
 from infra.model_sync import ensure_models_available
-from optimizer import PromptOptimizer
+from api.optimizer import PromptOptimizer
 from api.model_paths import model_source
 
 # ---------------------------------------------------------------------------

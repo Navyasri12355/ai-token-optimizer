@@ -47,7 +47,7 @@ def start_containers():
         sys.exit(1)
     
     # Start containers
-    run_command("docker-compose up -d", "Starting containers")
+    run_command("docker-compose -f infra/docker-compose.yml up -d", "Starting containers")
     
     # Wait for services
     print("\n⏳ Waiting for services to start (this may take 1-2 minutes)...")
@@ -70,7 +70,7 @@ def start_containers():
         return True
     else:
         print("\n⚠️ Some services failed to start. Check Docker logs:")
-        print("docker-compose logs")
+        print("docker-compose -f infra/docker-compose.yml logs")
         return False
 
 def wait_for_service(url, service_name, retries=60, interval=2):
@@ -157,7 +157,7 @@ def main():
     # Step 2: Start containers
     if not start_containers():
         print("\n⚠️ Services failed to start. Check logs and try again.")
-        print("Run: docker-compose logs")
+        print("Run: docker-compose -f infra/docker-compose.yml logs")
         sys.exit(1)
     
     # Step 3: Install Python dependencies
@@ -182,7 +182,7 @@ def main():
     print("   from monitoring.metrics import get_metrics_collector")
     print("\n📖 Full Documentation: ELASTICSEARCH_KIBANA_SETUP.md")
     print("\n🛑 To stop services:")
-    print("   docker-compose down")
+    print("   docker-compose -f infra/docker-compose.yml down")
     print("="*60)
 
 if __name__ == "__main__":

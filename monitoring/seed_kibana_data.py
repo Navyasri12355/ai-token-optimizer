@@ -4,10 +4,10 @@ spark/seed_kibana_data.py
 Backfills Elasticsearch with 30 days of realistic historical pipeline
 metrics so every Kibana dashboard panel shows meaningful time-series data.
 
-Run once after `docker-compose up -d elasticsearch kibana`:
-    python spark/seed_kibana_data.py
-    python spark/seed_kibana_data.py --days 60  # longer history
-    python spark/seed_kibana_data.py --es http://localhost:9200
+Run once after `docker-compose -f infra/docker-compose.yml up -d elasticsearch kibana`:
+    python monitoring/seed_kibana_data.py
+    python monitoring/seed_kibana_data.py --days 60  # longer history
+    python monitoring/seed_kibana_data.py --es http://localhost:9200
 
 Indices populated
 -----------------
@@ -271,7 +271,7 @@ def seed(es_url: str = "http://localhost:9200", days: int = 30):
               f"v{info['version']['number']}\n")
     except Exception as e:
         print(f"[ERROR] Cannot connect to Elasticsearch: {e}")
-        print("       Make sure Docker is running: docker-compose up -d elasticsearch")
+        print("       Make sure Docker is running: docker-compose -f infra/docker-compose.yml up -d elasticsearch")
         sys.exit(1)
 
     # Build all documents

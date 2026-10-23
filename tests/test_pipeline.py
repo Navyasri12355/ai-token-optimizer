@@ -128,7 +128,7 @@ class TestOptimizer(unittest.TestCase):
     """Unit tests for PromptOptimizer."""
 
     def setUp(self):
-        from optimizer import PromptOptimizer
+        from api.optimizer import PromptOptimizer
         self.opt = PromptOptimizer()
 
     def test_removes_fillers(self):

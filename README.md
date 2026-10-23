@@ -450,15 +450,17 @@ token-optimizer-events-*
 
 ```text
 api/                    FastAPI backend
-cloud/                  Azure deployment, Databricks, model sync, monitoring utilities
+infra/                  Infrastructure configs (Dockerfiles, deployment scripts, docker-compose)
 dashboard/              Streamlit frontend (legacy)
 frontend/               React+Vite frontend (new)
 data/                   Dataset loading and local data files
 spark/                  Spark preprocessing, training, prediction utilities
 ml/                     Additional model experiments
+docs/                   Documentation (deployment guides, setup instructions)
+monitoring/             Elasticsearch/Kibana logging and metrics
+tests/                  Unit tests
 requirements.txt        Full project dependencies
 requirements-api.txt    Lightweight API runtime dependencies
-docker-compose.yml      Local ELK/support services
 ```
 
 ## Current deployment status

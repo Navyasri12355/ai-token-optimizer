@@ -207,10 +207,10 @@ After successful test completion:
 To stop Docker Compose services:
 
 ```bash
-docker-compose down
+docker-compose -f infra/docker-compose.yml down
 
 # Remove data volumes (optional)
-docker-compose down -v
+docker-compose -f infra/docker-compose.yml down -v
 ```
 
 ## Troubleshooting
@@ -280,12 +280,12 @@ Cannot connect to Elasticsearch at localhost:9200
 **Solution**: Verify services are running
 ```bash
 # Check logs
-docker-compose logs elasticsearch
-docker-compose logs kibana
+docker-compose -f infra/docker-compose.yml logs elasticsearch
+docker-compose -f infra/docker-compose.yml logs kibana
 
 # Restart services
-docker-compose down
-docker-compose up -d
+docker-compose -f infra/docker-compose.yml down
+docker-compose -f infra/docker-compose.yml up -d
 ```
 
 ## Advanced Options
@@ -303,7 +303,7 @@ results = tester.run_all_tests()
 
 ### Configure Elasticsearch Retention
 
-Edit `docker-compose.yml` to set index lifecycle management:
+Edit `infra/docker-compose.yml` to set index lifecycle management:
 
 ```yaml
 elasticsearch:

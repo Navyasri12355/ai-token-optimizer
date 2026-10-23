@@ -91,8 +91,8 @@ class ElasticsearchKibanaTester:
         
         try:
             # Check if docker-compose.yml exists
-            if not os.path.exists("docker-compose.yml"):
-                print("❌ docker-compose.yml not found")
+            if not os.path.exists("infra/docker-compose.yml"):
+                print("❌ docker-compose.yml not found in infra/")
                 return False
             
             # Start services
@@ -100,7 +100,7 @@ class ElasticsearchKibanaTester:
                 ["docker-compose", "up", "-d"],
                 capture_output=True,
                 text=True,
-                cwd=os.getcwd()
+                cwd=os.path.join(os.getcwd(), "infra")
             )
             
             if result.returncode != 0:
@@ -535,7 +535,7 @@ class ElasticsearchKibanaTester:
         # Start services
         if not self.start_docker_compose():
             print("\n❌ Failed to start Docker Compose services")
-            print("   Make sure docker-compose.yml is in the current directory")
+            print("   Make sure docker-compose.yml is in the infra/ directory")
             print("   And Docker daemon is running")
             return {}
         

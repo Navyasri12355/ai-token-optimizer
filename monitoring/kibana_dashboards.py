@@ -9,9 +9,9 @@ Creates rich Kibana dashboards for the token-optimizer pipeline:
   4. ⚡ Optimization Savings   – savings % distribution, top conversations
   5. 🏥 Pipeline Health        – log levels, throughput, error rates
 
-Run AFTER docker-compose up (ELK stack must be running):
-  python spark/kibana_dashboards.py
-  python spark/kibana_dashboards.py --kibana http://localhost:5601
+Run AFTER docker-compose -f infra/docker-compose.yml up (ELK stack must be running):
+  python monitoring/kibana_dashboards.py
+  python monitoring/kibana_dashboards.py --kibana http://localhost:5601
 """
 
 import sys

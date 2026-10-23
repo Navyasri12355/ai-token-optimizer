@@ -46,7 +46,7 @@ This project integrates **Elasticsearch** and **Kibana** for:
 ### 1. Start Services with Docker Compose
 
 ```bash
-docker-compose up -d
+docker-compose -f infra/docker-compose.yml up -d
 ```
 
 This starts:
@@ -254,7 +254,7 @@ Set up alerts for:
 docker ps | grep elasticsearch
 
 # Restart services
-docker-compose restart elasticsearch
+docker-compose -f infra/docker-compose.yml restart elasticsearch
 ```
 
 ### Kibana Not Accessible
@@ -268,7 +268,7 @@ ERR_CONNECTION_REFUSED on localhost:5601
 docker logs kibana
 
 # If it still fails, restart Kibana
-docker-compose restart kibana
+docker-compose -f infra/docker-compose.yml restart kibana
 ```
 
 ### No Data in Kibana
@@ -288,7 +288,7 @@ docker-compose restart kibana
    ```
 
 ### High Memory Usage
-Elasticsearch can use significant memory. Adjust in `docker-compose.yml`:
+Elasticsearch can use significant memory. Adjust in `infra/docker-compose.yml`:
 ```yaml
 environment:
   - "ES_JAVA_OPTS=-Xms256m -Xmx256m"  # Reduce from 512m
@@ -332,7 +332,7 @@ environment:
 
 | File | Purpose |
 |------|---------|
-| `docker-compose.yml` | Container orchestration |
+| `infra/docker-compose.yml` | Container orchestration |
 | `logging_config.py` | Application logging setup |
 | `metrics.py` | Metrics collection and tracking |
 | `kibana_setup.py` | Dashboard initialization |
