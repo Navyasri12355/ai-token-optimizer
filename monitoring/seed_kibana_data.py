@@ -46,8 +46,11 @@ except ImportError:
 
 
 # ── Realistic value generators ─────────────────────────────────────────────────
-MODELS = ["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo", "claude-3-opus",
-          "claude-3-sonnet", "claude-3-haiku"]
+MODELS = ["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo",
+          "gpt-6-astra", "gpt-6-1-sol", "gpt-6-1-terra", "gpt-6-luna",
+          "claude-3-opus", "claude-3-sonnet", "claude-3-haiku",
+          "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5",
+          "gemini-4-argon"]
 LOG_LEVELS = ["INFO", "INFO", "INFO", "INFO", "WARNING", "ERROR"]
 LOG_MESSAGES = [
     "Starting PySpark preprocessing pipeline",
@@ -129,9 +132,17 @@ def build_pipeline_events(days: int):
                 "gpt-4o":          (0.005,  0.015),
                 "gpt-4-turbo":     (0.010,  0.030),
                 "gpt-3.5-turbo":   (0.0015, 0.002),
+                "gpt-6-astra":     (0.010,  0.050),
+                "gpt-6-1-sol":     (0.002,  0.010),
+                "gpt-6-1-terra":   (0.001,  0.005),
+                "gpt-6-luna":      (0.0001, 0.0005),
                 "claude-3-opus":   (0.015,  0.075),
                 "claude-3-sonnet": (0.003,  0.015),
                 "claude-3-haiku":  (0.00025,0.00125),
+                "claude-opus-5-5": (0.004,  0.020),
+                "claude-sonnet-5-5": (0.002,  0.010),
+                "claude-haiku-5-5": (0.0001, 0.0005),
+                "gemini-4-argon":  (0.002,  0.010),
             }
             inp_rate, out_rate = pricing[model]
             avg_tokens = _jitter(320.0, 0.3)

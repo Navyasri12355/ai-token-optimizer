@@ -14,8 +14,10 @@ import requests
 MODELS = [
     "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5.5-pro",
     "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-5.4-pro",
+    "gpt-6-astra", "gpt-6-1-sol", "gpt-6-1-terra", "gpt-6-luna",
     "claude-opus-4-8", "claude-sonnet-5", "claude-sonnet-4-6", "claude-haiku-4-5",
-    "gemini-3-1-pro-preview", "gemini-3-5-flash"
+    "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5",
+    "gemini-3-1-pro-preview", "gemini-3-5-flash", "gemini-4-argon"
 ]
 
 # Sample prompts
@@ -53,12 +55,20 @@ def generate_sample_record(timestamp: datetime) -> Dict:
         "gpt-5.4-mini": (0.00075, 0.0045),
         "gpt-5.4-nano": (0.0002, 0.00125),
         "gpt-5.4-pro": (0.03, 0.18),
+        "gpt-6-astra": (0.010, 0.050),
+        "gpt-6-1-sol": (0.002, 0.010),
+        "gpt-6-1-terra": (0.001, 0.005),
+        "gpt-6-luna": (0.0001, 0.0005),
         "claude-opus-4-8": (0.005, 0.025),
         "claude-sonnet-5": (0.002, 0.01),
         "claude-sonnet-4-6": (0.003, 0.015),
         "claude-haiku-4-5": (0.001, 0.005),
+        "claude-opus-5-5": (0.004, 0.020),
+        "claude-sonnet-5-5": (0.002, 0.010),
+        "claude-haiku-5-5": (0.0001, 0.0005),
         "gemini-3-1-pro-preview": (0.002, 0.012),
-        "gemini-3-5-flash": (0.0015, 0.009)
+        "gemini-3-5-flash": (0.0015, 0.009),
+        "gemini-4-argon": (0.002, 0.010)
     }
     
     input_price, output_price = model_pricing.get(model, (0.001, 0.002))

@@ -48,12 +48,23 @@ PLOT_DIR          = str(ROOT / "spark" / "output" / "plots")
 
 # ── Pricing table (per 1 000 tokens, USD) ─────────────────────────────────────
 PRICING: Dict[str, Dict[str, float]] = {
+    # OpenAI Models
     "gpt-4o":           {"input": 0.005,   "output": 0.015},
     "gpt-4-turbo":      {"input": 0.010,   "output": 0.030},
     "gpt-3.5-turbo":    {"input": 0.0015,  "output": 0.002},
+    "gpt-6-astra":      {"input": 0.010,   "output": 0.050},
+    "gpt-6-1-sol":      {"input": 0.002,   "output": 0.010},
+    "gpt-6-1-terra":    {"input": 0.001,   "output": 0.005},
+    "gpt-6-luna":       {"input": 0.0001,  "output": 0.0005},
+    # Anthropic Models
     "claude-3-opus":    {"input": 0.015,   "output": 0.075},
     "claude-3-sonnet":  {"input": 0.003,   "output": 0.015},
     "claude-3-haiku":   {"input": 0.00025, "output": 0.00125},
+    "claude-opus-5-5":  {"input": 0.004,   "output": 0.020},
+    "claude-sonnet-5-5": {"input": 0.002,   "output": 0.010},
+    "claude-haiku-5-5": {"input": 0.0001,  "output": 0.0005},
+    # Google Models
+    "gemini-4-argon":   {"input": 0.002,   "output": 0.010},
 }
 
 DEFAULT_MODEL = "gpt-4o"

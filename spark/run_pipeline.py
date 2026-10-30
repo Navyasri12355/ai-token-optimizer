@@ -238,7 +238,10 @@ def _build_parser():
                     default=os.environ.get("KIBANA_URL", "http://localhost:5601"))
     ap.add_argument("--pricing-model", default="gpt-4o",
                     choices=["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo",
-                             "claude-3-opus", "claude-3-sonnet", "claude-3-haiku"])
+                             "gpt-6-astra", "gpt-6-1-sol", "gpt-6-1-terra", "gpt-6-luna",
+                             "claude-3-opus", "claude-3-sonnet", "claude-3-haiku",
+                             "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5",
+                             "gemini-4-argon"])
     ap.add_argument("--cv-folds", type=int, default=3)
     ap.add_argument("--skip-preprocess",  action="store_true")
     ap.add_argument("--skip-train",       action="store_true")
