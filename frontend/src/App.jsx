@@ -18,21 +18,6 @@ function App() {
   const [selectedModel, setSelectedModel] = useState(MODELS[0]);
   const { darkMode, toggleDarkMode } = useTheme();
 
-  // Load sample data on mount to show populated dashboard
-  useEffect(() => {
-    const sampleData = {
-      input_tokens: 1250,
-      output_tokens: 890,
-      total_tokens: 2140,
-      estimated_cost: calculateCost(1250, 890, selectedModel),
-      optimized_prompt: "Explain transformers in ML",
-      token_savings_percent: 35.5,
-      compression_percent: 28.2,
-    };
-    setResult(sampleData);
-    setPrompt("Can you please explain to me in detail what transformers are in the context of machine learning and how they work?");
-  }, [selectedModel]);
-
   const handleAnalyze = async () => {
     if (!prompt.trim()) {
       setError('Please enter a prompt.');
