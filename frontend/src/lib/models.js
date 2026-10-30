@@ -222,9 +222,9 @@ export function getModelsByProvider(provider) {
 
 // Provider logo mapping
 export const PROVIDER_LOGOS = {
-  'OpenAI': '/logos/openai_logo.png',
-  'Anthropic': '/logos/claude_logo.png',
-  'Google': '/logos/gemini_logo.png',
+  'OpenAI': '/openai_logo.png',
+  'Anthropic': '/claude_logo.png',
+  'Google': '/gemini_logo.png',
 };
 
 // Get first available model for a provider
