@@ -35,20 +35,23 @@ class PromptOptimizer:
         # 1️⃣ Lowercase
         optimized = prompt.lower()
 
-        # 2️⃣ Remove filler phrases
+        # 2️⃣ Normalize repeated characters (e.g. "isssssssss" → "is", "heeello" → "helo")
+        optimized = re.sub(r'(.)\1{2,}', r'\1', optimized)
+
+        # 3️⃣ Remove filler phrases
         for filler in self.fillers:
             optimized = optimized.replace(filler, "")
 
-        # 3️⃣ Remove punctuation (keep meaning)
+        # 4️⃣ Remove punctuation (keep meaning)
         optimized = re.sub(r'[^\w\s]', '', optimized)
 
-        # 4️⃣ Tokenize
+        # 5️⃣ Tokenize
         words = optimized.split()
 
-        # 5️⃣ Remove stopwords (but keep important ones)
+        # 6️⃣ Remove stopwords (but keep important ones)
         compressed_words = [w for w in words if w not in self.stop_words]
 
-        # 6️⃣ Remove duplicates (smart compression)
+        # 7️⃣ Remove duplicates (smart compression)
         seen = set()
         unique_words = []
         for w in compressed_words:
